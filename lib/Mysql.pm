@@ -8,9 +8,9 @@ require Mysql::Statement;
 $QUIET  = $QUIET  = '';
 @ISA    = @ISA    = '';
 @EXPORT = @EXPORT = '';
-$VERSION = $VERSION = "1.1801";
+$VERSION = $VERSION = "1.1802";
 
-# $Revision: 1.1.1.1 $$Date: 1997/08/27 10:32:15 $$RCSfile: Mysql.pm,v $
+# $Revision: 1.2 $$Date: 1997/08/27 21:44:42 $$RCSfile: Mysql.pm,v $
 
 $QUIET = 0;
 

@@ -1,6 +1,8 @@
-$Id: ChangeLog,v 1.1.1.1 1997/08/27 10:32:13 joe Exp $
+$Id: ChangeLog,v 1.2 1997/08/27 21:44:34 joe Exp $
 
 DBD::mysql for DBI - Written by Jochen Wiedmann <wiedmann@neckar-alb.de>
+
+97.08.27  Removed use of TEXT_TYPE from pmysql and Mysql/Statement.pm.
 
 97.08.16  Modified mysql.xs, dbdimp.h and dbdimp.c for use in DBD::mSQL.
 	  Now using Andreas König´s Makefile.PL from the DBD::mSQL

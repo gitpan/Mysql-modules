@@ -9,7 +9,7 @@ $Verbose++ if $ENV{USER} eq "k";
 
 WriteMakefile(
 	      NAME       => "Mysql",
-	      "DISTNAME" => "mysql-modules",
+	      "DISTNAME" => "Mysql-modules",
 	      "dist"     => { SUFFIX   => ".gz", DIST_DEFAULT => 'all tardist',
 			      COMPRESS => "gzip -9f" },
 	      VERSION_FROM => "lib/Mysql.pm",

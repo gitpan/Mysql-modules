@@ -21,8 +21,8 @@ $Config{'startperl'}
 
 print OUT <<'!NO!SUBS!';
 
-# $Id: pmysql.PL,v 1.1.1.1 1997/08/27 10:32:13 joe Exp $
-my $version = substr q$Revision: 1.1.1.1 $, 10;
+# $Id: pmysql.PL,v 1.2 1997/08/27 22:13:16 joe Exp $
+my $version = substr q$Revision: 1.2 $, 10;
 
 BEGIN {require 5.002;}
 # use strict;      # only for testing. Unfriendly for the user-eval()s
@@ -47,13 +47,43 @@ $^W = 1;
 
 my(@typelabel);
 @typelabel[
-	   Mysql::INT_TYPE(),
-	   Mysql::CHAR_TYPE(),
-	   Mysql::REAL_TYPE(),
+	   Mysql::FIELD_TYPE_BLOB(),
+	   Mysql::FIELD_TYPE_CHAR(),
+	   Mysql::FIELD_TYPE_DECIMAL(),
+	   Mysql::FIELD_TYPE_DATE(),
+	   Mysql::FIELD_TYPE_DATETIME(),
+	   Mysql::FIELD_TYPE_DOUBLE(),
+	   Mysql::FIELD_TYPE_FLOAT(),
+	   Mysql::FIELD_TYPE_INT24(),
+	   Mysql::FIELD_TYPE_LONGLONG(),
+	   Mysql::FIELD_TYPE_LONG_BLOB(),
+	   Mysql::FIELD_TYPE_LONG(),
+	   Mysql::FIELD_TYPE_NULL(),
+	   Mysql::FIELD_TYPE_SHORT(),
+	   Mysql::FIELD_TYPE_STRING(),
+	   Mysql::FIELD_TYPE_TINY_BLOB(),
+	   Mysql::FIELD_TYPE_TIMESTAMP(),
+	   Mysql::FIELD_TYPE_TIME(),
+	   Mysql::FIELD_TYPE_VAR_STRING()
 	  ] = qw(
-		 int
-		 char 
-		 real
+		 blob,
+		 char,
+		 decimal,
+		 date,
+		 datetime,
+		 double,
+		 float,
+		 int24,
+		 longlong,
+		 longblob,
+		 long,
+		 null,
+		 short,
+		 string,
+		 tinyblob,
+		 timestamp,
+		 time,
+		 varstring
 		);
 
 # host
@@ -374,15 +404,15 @@ sub relshow {
 	    my $fieldwidth = longest($sth->name,"Field") || 15;
 	    my $keywidth = $Dbh->getserverinfo lt 2 ? 3 : 12;
 	    my $keytitle = $Dbh->getserverinfo lt 2 ? "Key" : "Unique Index";
-	    my $border = " +-".("-"x$fieldwidth)."-+-------+--------+----------+-".("-"x$keywidth)."-+\n";
+	    my $border = " +-".("-"x$fieldwidth)."-+-----------+--------+----------+-".("-"x$keywidth)."-+\n";
 	    push @m, $border;
-	    push @m, sprintf " | %-".$fieldwidth."s | Type  | Length | Not Null | %-".$keywidth."s |\n", "Field", $keytitle;
+	    push @m, sprintf " | %-".$fieldwidth."s | Type      | Length | Not Null | %-".$keywidth."s |\n", "Field", $keytitle;
 	    push @m, $border;
 	    my $max = $sth->numfields;
 	    for ($i=0;$i<$max;$i++){
 		my $keyNO = $Dbh->getserverinfo lt 2 ? "N" :
 		    $sth->type->[$i]==Mysql::IDX_TYPE() ? "N" : "N/A";
-		push @m, sprintf " | %-".$fieldwidth."s | %-5s | %6s |    %-3s   | %-".$keywidth."s |\n",
+		push @m, sprintf " | %-".$fieldwidth."s | %-9s | %6s |    %-3s   | %-".$keywidth."s |\n",
 			$sth->name->[$i],
 			$typelabel[$sth->type->[$i]] || ("unknown-".$sth->type->[$i]),
 			($sth->length->[$i] || "N/A"),
