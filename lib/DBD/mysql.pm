@@ -1,6 +1,6 @@
 #   Our beloved Emacs will give us -*- perl -*- mode :-)
 #
-#   $Id: mSQL.pm,v 1.1803 1997/08/28 23:38:57 joe Exp $
+#   $Id: mysql.pm,v 1.1805 1997/09/03 12:22:07 joe Exp $
 #
 #   Copyright (c) 1994,1995,1996,1997 Alligator Descartes, Tim Bunce
 #
@@ -16,7 +16,7 @@ use DynaLoader();
 use Carp ();
 @ISA = qw(DynaLoader);
 
-$VERSION = "2.000";
+$VERSION = "2.002";
 
 bootstrap DBD::mysql $VERSION;
 
@@ -196,12 +196,29 @@ sub quote {
     "'$str'";
 }
 
+# Just a stub for backward compatibility; use is deprecated
+sub _ListFields($$) {
+    my ($self, $table) = @_;
+    my ($sth);
+    if (!($sth = $self->prepare("LISTFIELDS $table"))) {
+	return undef;
+    }
+    if (!$sth->execute) {
+	return undef;
+    }
+    $sth;
+}
 
 package DBD::mysql::st; # ====== STATEMENT ======
 use strict;
 
 sub errstr {
     $DBD::mysql::errstr;
+}
+
+# Just a stub for backward compatibility; use is deprecated
+sub _ListSelectedFields ($) {
+    shift;
 }
 
 1;
@@ -226,27 +243,28 @@ Interface (DBI)
     $dbh = DBI->connect("DBI:mysql:$database:$hostname:$port",
 			$user, $password);
 
-    @databases = $drh->func( $hostname, '_ListDBs' );
+    @databases = DBD::mysql::dr->func( $hostname, '_ListDBs' );
     @tables = $dbh->func( '_ListTables' );
-    $ref = $dbh->func( $table, '_ListFields' );
-    $ref = $sth->func( '_ListSelectedFields' );
 
-    $numRows = $sth->func( '_NumRows' );
+    $sth = $dbh->prepare("LISTFIELDS $table");
+    $sth->execute;
+    $sth->finish;
+
+    $sth = $dbh->prepare("SELECT * FROM foo WHERE bla");
+    $sth->execute;
+    $numRows = $sth->rows;
+    $numFields = $sth->{'NUM_OF_FIELDS'};
+    $sth->finish;
 
     $rc = $drh->func( $database, '_CreateDB' );
     $rc = $drh->func( $database, '_DropDB' );
+
 
 =head1 DESCRIPTION
 
 <DBD::mysql> and <DBD::mSQL> are the Perl5 Database Interface drivers for
 the mysql, mSQL 1.I<x> and mSQL 2.I<x> databases. The drivers are part
 of the I<mysql-modules> and I<Msql-modules> packages, respectively.
-
-=head2 Compatibility Alert
-
-As of version 0.70 DBD::mSQL has a new maintainer. Even more, the sources
-have been completely rewritten in August 1997, so it seemed apropriate
-to bump the version number: Incompatibilities are more than likely.
 
 
 =head2 Class Methods
@@ -329,74 +347,11 @@ an empty list is returned.
 
 =item B<ListFields>
 
-    $ref = $dbh->func( $table, '_ListFields' );
-
-C<ListFields> returns a reference to a hashtable containing metadata
-information on the fields within the given table. If the table
-specified in C<table> does not exist, C<undef> will be returned and an
-error flagged.
-
-The valid keys within the hashtable that may be referenced are:
-
-    NAME           The name of the field
-    TYPE           The datatype of the field: CHAR, REAL, INTEGER, NULL
-    IS_NOT_NULL    Indicates whether the field is NULLable or not
-    IS_PRI_KEY     Indicates whether the field is a Primary Key ( this is
-                     only valid in mSQL 1.x databases. mSQL 2.x uses indices )
-    LENGTH         The size of the field
-    NUMFIELDS      The number of fields within the table
-
-Mysql also supports the following keys:
-
-    IS_KEY         Indicates whether the field is part of any key.
-    IS_BLOB        Indicates whether the given field is of blob type;
-                   don't put too much interpretation in this: A char
-                   field may contain binary data too, though size
-                   restricted.
-    IS_NUM         Indicates whether the given field contains numeric
-                   data. (The driver will return strings anyways,
-                   as the database does.)
-    MAXLENGTH      Perhaps the maximum length of all fields of the
-                   given column; as far as I know this isn't documented,
-                   so don't trust in that. (Monty?)
-    
-
-Since a reference is returned, it requires slightly more work to
-extract the pertinent information from it. Here's an example of how to
-do it:
-
-    $ref = $dbh->func( 'someTable', '_ListFields' );
-    @fieldNames = @{ $ref->{NAME} };
-    @fieldTypes = @{ $ref->{TYPE} };
-    @fieldNulls = @{ $ref->{IS_NOT_NULL} };
-    @fieldKeys  = @{ $ref->{IS_PRI_KEY} };
-    @fieldLength = @{ $ref->{LENGTH} };
-    for ( $i = 0 ; $i < $ref->{NUMFIELDS} ; $i++ ) {
-        print "Field: $fieldNames[$i]\n";
-        print "\tType: $fieldTypes[$i]\n";
-        print "\tNullable: $fieldNulls[$i]\n";
-        print "\tKey?: $fieldKeys[$i]\n";
-        print "\tLength: $fieldLength[$i]\n";
-      }
-
+Deprecated, see L</COMPATIBILITY ALERT> below.
 
 =item B<ListSelectedFields>
 
-    $ref = $sth->func( '_ListSelectedFields' );
-
-C<ListSelectedFields> is a similar function to C<ListFields>, except,
-where C<ListFields> lists the fields for a given table within the
-current database, C<ListSelectedFields> lists the field information
-for the fields present in a B<SELECT> statement handle. This is
-primarily used for extracting meta-data about the current C<sth>.
-
-The usage of C<ListSelectedFields> is identical to C<ListFields>, but
-you might use the following additional keys:
-
-    NUMFIELDS       The number of fields selected in one row; this
-                    should be valid even if the query didn't return
-                    any rows.
-    NUMROWS         The number of rows selected.
+Deprecated, see L</COMPATIBILITY ALERT> below.
 
 =back
 
@@ -427,6 +382,200 @@ These methods should be used at your own risk.
 
 =back
 
+
+=head1 STATEMENT HANDLES
+
+The statement handles of DBD::mysql and DBD::mSQL support a number
+of attributes. You access these by using, for example,
+
+  my $numFields = $sth->{'NUM_OF_FIELDS'};
+
+Note, that most attributes are valid only after a successfull I<execute>.
+An C<undef> value will returned in that case.
+
+Column dependant attributes, for example I<NAME>, the column names,
+are returned as a reference to an array. The array indices are
+corresponding to the indices of the arrays returned by I<fetchrow>
+and similar methods. For example the following code will print a
+header of table names together with all rows:
+
+  my $sth = $dbh->prepare("SELECT * FROM $table");
+  if (!$sth) {
+      die "Error:" . $dbh->errstr . "\n";
+  }
+  if (!$sth->execute) {
+      die "Error:" . $sth->errstr . "\n";
+  }
+  my $names = $sth->{'NAME'};
+  my $numFields = $sth->{'NUM_OF_FIELDS'};
+  for (my $i = 0;  $i < $numFields;  $i++) {
+      printf("%s%s", $$names[$i], $i ? "," : "");
+  }
+  print "\n";
+  while (my $ref = $sth->fetchrow_arrayref) {
+      for (my $i = 0;  $i < $numFields;  $i++) {
+	  printf("%s%s", $$ref[$i], $i ? "," : "");
+      }
+      print "\n";
+  }
+x
+For portable applications you should restrict yourself to attributes with
+capitalized or mixed case names. Lower case attribute names are private
+to DBD::mSQL and DBD::mysql. The attribute list includes:
+
+=over 4
+
+=item ChopBlanks
+
+this attribute determines whether a I<fetchrow> will chop preceding
+and trailing blanks off the column values. Chopping blanks does not
+have impact on the I<max_length> attribute.
+
+=item insertid
+
+MySQL has the ability to choose unique key values automatically. If this
+happened, the new ID will be stored in this attribute. This attribute
+is not valid for DBD::mSQL.
+
+=item is_blob
+
+Reference to an array of boolean values; TRUE indicates, that the
+respective column is a blob. This attribute is valid for MySQL only.
+
+=item is_key
+
+Reference to an array of boolean values; TRUE indicates, that the
+respective column is a key. This is valid for MySQL only.
+
+=item is_num
+
+Reference to an array of boolean values; TRUE indicates, that the
+respective column contains numeric values.
+
+=item is_pri_key
+
+Reference to an array of boolean values; TRUE indicates, that the
+respective column is a primary key. This is only valid for MySQL
+and mSQL 1.0.x: mSQL 2.x uses indices.
+
+=item is_not_null
+
+A reference to an array of boolean values; FALSE indicates that this
+column may contain NULL's. You should better use the I<NULLABLE>
+attribute above which is a DBI standard.
+
+=item length
+
+=item max_length
+
+A reference to an array of maximum column sizes. The I<max_length> is
+the maximum physically present in the result table, I<length> gives
+the theoretically possible maximum. I<max_length> is valid for MySQL
+only.
+
+=item NAME
+
+A reference to an array of column names.
+
+=item NULLABLE
+
+A reference to an array of boolean values; TRUE indicates that this column
+may contain NULL's.
+
+=item NUM_OF_FIELDS
+
+Number of fields returned by a I<SELECT> or I<LISTFIELDS> statement.
+You may use this for checking whether a statement returned a result:
+A zero value indicates a non-SELECT statement like I<INSERT>,
+I<DELETE> or I<UPDATE>.
+
+=item table
+
+A reference to an array of table names, useful in a I<JOIN> result.
+
+=item type
+
+A reference to an array of column types. It depends on the DBMS,
+which values are returned, even for identical types. mSQL will
+return types like &mSQL::INT_TYPE, &msql::TEXT_TYPE etc., MySQL
+uses &mysql::FIELD_TYPE_SHORT, &mysql::FIELD_TYPE_STRING etc.
+
+=back
+
+
+=head1 COMPATIBILITY ALERT
+
+As of version 0.70 DBD::mSQL has a new maintainer. Even more, the sources
+have been completely rewritten in August 1997, so it seemed apropriate
+to bump the version number: Incompatibilities are more than likely.
+
+=head2 Recent changes:
+
+=over 2
+
+=item New connect method
+
+DBD::mSQL and DBD::mysql now use the new I<connect> method as introduced
+with DBI 0.83 or so. For compatibility reasons the old method still
+works, but the driver issues a warning when he detects use of the
+old version. There's no workaround, you must update your sources.
+(Sorry, but the change was in DBI, not in DBD::mysql and DBD::mSQL.)
+
+=item _ListFields returning statement handle
+
+As of Msql-modules 1.1805, the private functions
+
+    $dbh->func($table, "_ListFields");
+
+and
+
+    $sth->func("_ListSelectedFields");
+
+no longer returns a simple hash, but a statement handle.
+(I<_ListSelectedFields> is a stub now which just returns $self.)
+This should usually not be visible, when your statement handle gets
+out of scope. However, if your database handle (C<$dbh> in the
+aboce example) disconnects, either because you explicitly disconnect
+or because he gets out of scope, and the statement handle is still
+active, DBI will issue a warning for active cursors being destroyed.
+
+The simple workaround is to execute C<$sth-E<gt>finish> or to ensure
+that C<$sth> gets out of scope before C<$dbh>. Sorry, but it was
+obvious nonsense to support two different things for accessing the
+basically same thing: An mSQL or MySQL result.
+
+=back
+
+The drivers do not conform to the current DBI specification in some minor
+points. For example, the private attributes I<is_num> or I<is_blob> have
+been written I<IS_NUM> and I<IS_BLOB>. For historical reasons we continue
+supporting the capitalized names, although the DBI specification now
+reserves capitalized names for standard names, mixed case for DBI and lower
+case for private attributes and methods.
+
+We currently consider anything not conforming to the DBI as deprecated.
+It is quite possible that we remove support of these deprecated names
+and methods in the future. In particular these includes:
+
+=over 4
+
+=item C<$sth-E<gt>func($table, '_ListSelectedFields')>
+
+highly deprecated, all attributes are directly accessible via the
+statement handle. For example instead of
+
+  $ref = $sth->func($table, '_ListSelectedFields')
+  my @names = $ref->{'NAME'}
+
+you just do a
+
+  my @names = $sth->{'NAME'};
+
+=item Capitalized attribute names
+
+Deprecated, should be replaced by the respective lower case names.
+
+=back
 
 =head1 BUGS
 
@@ -527,7 +676,7 @@ such as books, magazine articles or CD-ROMs should be made to
 Alligator Descartes <I<descarte@hermetica.com>>.
 
 
-=head1 Additional DBI Information
+=head1 ADDITIONAL DBI INFORMATION
 
 Additional information on the DBI project can be found on the World
 Wide Web at the following URL:

@@ -21,7 +21,7 @@
  *           Fax: +49 7123 / 14892
  *
  *
- *  $Id: dbdimp.c,v 1.1804 1997/08/30 15:09:42 joe Exp $
+ *  $Id: dbdimp.c,v 1.1805 1997/09/03 12:21:36 joe Exp $
  */
 
 
@@ -327,7 +327,7 @@ SV* dbd_db_FETCH_attrib(SV* dbh, SV* keysv) {
     }
     if (kl == 5  &&  strEQ(key, "errno")) {
 #if defined(DBD_MYSQL)  &&  defined(mysql_errno)
-	return sv_2mortal(newSViv(mysql_errno(imp_dbh->svsock)));
+	return sv_2mortal(newSViv((IV)mysql_errno(imp_dbh->svsock)));
 #else
 	return sv_2mortal(newSViv(-1));
 #endif
@@ -336,95 +336,6 @@ SV* dbd_db_FETCH_attrib(SV* dbh, SV* keysv) {
 	return sv_2mortal(newSVpv(msg, strlen(msg)));
     }
     return Nullsv;
-}
-
-
-/***************************************************************************
- *
- *  Name:    dbd_db_fieldlist
- *
- *  Purpose: A terrible mega monster kinf of retreiving sth attributes;
- *           returns just anything.
- *
- *  Input:   res - pointer to an mysql result structure
- *
- *  Returns: An RV*, if sucessfull; NULL otherwise
- *
- **************************************************************************/
-
-#ifndef IS_KEY
-#define IS_KEY(A) (((A) & (PRI_KEY_FLAG | UNIQUE_KEY_FLAG | MULTIPLE_KEY_FLAG)) != 0)
-#endif
-#ifndef IS_NUM
-#define IS_NUM(A) ((A) >= (int) FIELD_TYPE_DECIMAL && (A) <= FIELD_TYPE_DATETIME)
-#endif
-
-SV* dbd_db_fieldlist(result_t res) {
-    field_t curField;
-    HV* hv;
-    SV* rv;
-    AV* avkey;
-    AV* avnam;
-    AV* avnnl;
-    AV* avtab;
-    AV* avtyp;
-    AV* avlength;
-#ifdef DBD_MYSQL
-    AV* avmaxlength;
-    AV* aviskey;
-    AV* avisblob;
-    AV* avisnum;
-#endif
-
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    hv_store(hv,"NUMROWS",7,(SV *)newSViv((IV)MyNumRows(res)),0);
-    hv_store(hv,"NUMFIELDS",9,(SV *)newSViv((IV)MyNumFields(res)),0);
-
-    MyFieldSeek(res,0);
-    avkey = (AV*)newAV();
-    avnam = (AV*)newAV();
-    avnnl = (AV*)newAV();
-    avtab = (AV*)newAV();
-    avtyp = (AV*)newAV();
-    avlength = (AV*)newAV();
-#ifdef DBD_MYSQL
-    avmaxlength = (AV*)newAV();
-    aviskey = (AV*)newAV();
-    avisblob = (AV*)newAV();
-    avisnum  = (AV*)newAV();
-#endif
-
-    while ((curField = MyFetchField(res))) {
-        av_push(avnam, (SV*)newSVpv(curField->name,strlen(curField->name)));
-        av_push(avtab, (SV*)newSVpv(curField->table,strlen(curField->table)));
-        av_push(avtyp, (SV*)newSViv((int) curField->type));
-        av_push(avkey, (SV*)newSViv(IS_PRI_KEY(curField->flags) != 0));
-        av_push(avnnl, (SV*)newSViv(IS_NOT_NULL(curField->flags) != 0));
-        av_push(avlength, (SV*)newSViv((int) curField->length));
-#ifdef DBD_MYSQL
-        av_push(avmaxlength, (SV*)newSViv((int) curField->max_length));
-        av_push(aviskey, (SV*)newSViv(IS_KEY(curField->flags) != 0));
-        av_push(avisblob, (SV*)newSViv((curField->flags & BLOB_FLAG) != 0));
-        av_push(avisnum, (SV*)newSViv(IS_NUM(curField->type)));
-#endif
-    }
-
-    rv = newRV((SV*)avnam); hv_store(hv,"NAME",4,rv,0);
-    rv = newRV((SV*)avtab); hv_store(hv,"TABLE",5,rv,0);
-    rv = newRV((SV*)avtyp); hv_store(hv,"TYPE",4,rv,0);
-    rv = newRV((SV*)avkey); hv_store(hv,"IS_PRI_KEY",10,rv,0);
-    rv = newRV((SV*)avnnl); hv_store(hv,"IS_NOT_NULL",11,rv,0);
-    rv = newRV((SV*)avlength); hv_store(hv,"LENGTH",6,rv,0);
-#ifdef DBD_MYSQL
-    rv = newRV((SV*)avmaxlength); hv_store(hv,"MAXLENGTH",9,rv,0);
-    rv = newRV((SV*)aviskey); hv_store(hv,"IS_KEY",6,rv,0);
-    rv = newRV((SV*)avisblob); hv_store(hv,"IS_BLOB",7,rv,0);
-    rv = newRV((SV*)avisnum); hv_store(hv,"IS_NUM",5,rv,0);
-#endif
-    hv_store(hv,"RESULT",6,(SV *)newSViv((IV)res),0);
-    rv = sv_2mortal(newRV((SV*)hv));
-
-    return rv;
 }
 
 
@@ -482,6 +393,7 @@ static int CommandHasResult(char* statement) {
 	{ "SYSTABLES", COMMAND_SYSTABLES },
         { "UPDATE", COMMAND_UPDATE },
 	{ "ALTER", COMMAND_ALTER },
+	{ "LISTFIELDS", COMMAND_LISTFIELDS },
 	{ NULL, COMMAND_UNKNOWN }
     };
 
@@ -530,6 +442,7 @@ int dbd_st_prepare(SV* sth, char* statement, SV* attribs) {
     D_imp_sth(sth);
     char* ptr = statement;
     int num_param;
+    int i;
 
     /*
      *  Count the number of parameters
@@ -569,6 +482,9 @@ int dbd_st_prepare(SV* sth, char* statement, SV* attribs) {
     imp_sth->cda = NULL;
     imp_sth->currow = 0;
     imp_sth->command = CommandHasResult(statement);
+    for (i = 0;  i < AV_ATTRIB_LAST;  i++) {
+	imp_sth->av_attr[i] = Nullav;
+    }
 
     /*
      *  Allocate memory for parameters
@@ -608,6 +524,7 @@ int dbd_st_execute(SV* sth) {
     STRLEN slen;
     char* sbuf;
     char* salloc = NULL;
+    int i;
 
     if (dbis->debug >= 2) {
         fprintf(DBILOGFP, "    -> dbd_st_execute for %08lx\n", (u_long) sth);
@@ -615,6 +532,16 @@ int dbd_st_execute(SV* sth) {
 
     if (!SvROK(sth)  ||  SvTYPE(SvRV(sth)) != SVt_PVHV) {
         croak("Expected hash array");
+    }
+
+    /*
+     *  Free cached array attributes
+     */
+    for (i = 0;  i < AV_ATTRIB_LAST;  i++) {
+	if (imp_sth->av_attr[i]) {
+	    SvREFCNT_dec(imp_sth->av_attr[i]);
+	}
+	imp_sth->av_attr[i] = Nullav;
     }
 
     statement = hv_fetch((HV*) SvRV(sth), "Statement", 9, FALSE);
@@ -749,34 +676,65 @@ int dbd_st_execute(SV* sth) {
 	}
     }
 
-    if (MyQuery(imp_dbh->svsock, sbuf, slen) == -1) {
-        Safefree(salloc);
-        DO_ERROR(sth, JW_ERR_QUERY, imp_dbh->svsock);
-	return -2;
-    }
-    Safefree(salloc);
+    if (imp_sth->command == COMMAND_LISTFIELDS) {
+	char* table;
 
-    /** Store the result from the Query */
-    if (imp_sth->command < 0) {
-#ifdef DBD_MYSQL
-        imp_sth->row_num = mysql_affected_rows(imp_dbh->svsock);
-	if (imp_sth->command == COMMAND_INSERT) {
-	    imp_sth->insertid = mysql_insert_id(imp_dbh->svsock);
+	while (slen && isspace(*sbuf)) { --slen;  ++sbuf; }
+	while (slen && !isspace(*sbuf)) { --slen;  ++sbuf; }
+	while (slen && isspace(*sbuf)) { --slen;  ++sbuf; }
+
+	if (!slen) {
+	    do_error(sth, JW_ERR_QUERY, "Missing table name");
+	    return -2;
 	}
-#else
-	imp_sth->row_num = 0;
-#endif
-	return -1;
-    }
 
-    if (!(imp_sth->cda = MyStoreResult(imp_dbh->svsock))) {
-        DO_ERROR(sth, JW_ERR_QUERY, imp_dbh->svsock);
-	return -2;
+	if (!(table = malloc(slen+1))) {
+	    do_error(sth, JW_ERR_MEM, "Out of memory");
+	    return -2;
+	}
+	strncpy(table, sbuf, slen);
+	table[slen] = '\0';
+	imp_sth->cda = MyListFields(imp_dbh->svsock, sbuf);
+	free(table);
+
+	if (!imp_sth->cda) {
+	    DO_ERROR(sth, JW_ERR_LIST_FIELDS, imp_dbh->svsock);
+	    return -2;
+	}
+
+	imp_sth->row_num = 0;
+    } else {
+	if (MyQuery(imp_dbh->svsock, sbuf, slen) == -1) {
+	    Safefree(salloc);
+	    DO_ERROR(sth, JW_ERR_QUERY, imp_dbh->svsock);
+	    return -2;
+	}
+	Safefree(salloc);
+
+	/** Store the result from the Query */
+	if (imp_sth->command < 0) {
+#ifdef DBD_MYSQL
+	    imp_sth->row_num = mysql_affected_rows(imp_dbh->svsock);
+	    if (imp_sth->command == COMMAND_INSERT) {
+		imp_sth->insertid = mysql_insert_id(imp_dbh->svsock);
+	    }
+	    return imp_sth->row_num;
+#else
+	    imp_sth->row_num = 0;
+	    return -1;
+#endif
+	}
+
+	if (!(imp_sth->cda = MyStoreResult(imp_dbh->svsock))) {
+	    DO_ERROR(sth, JW_ERR_QUERY, imp_dbh->svsock);
+	    return -2;
+	}
+
+	imp_sth->row_num = MyNumRows(imp_sth->cda);
     }
 
     /** Store the result in the current statement handle */
     DBIc_ACTIVE_on(imp_sth);
-    imp_sth->row_num = MyNumRows(imp_sth->cda);
     DBIc_NUM_FIELDS(imp_sth) = MyNumFields(imp_sth->cda);
     imp_sth->done_desc = 0;
 
@@ -862,27 +820,32 @@ AV* dbd_st_fetch(SV* sth) {
 
     for(i=0; i < num_fields; ++i) {
         char* col = cols[i];
-#ifdef DBD_MYSQL
-	STRLEN len = lengths[i];
-#else
-	STRLEN len = strlen(col);
-#endif
-
 	SV *sv = AvARRAY(av)[i]; /* Note: we (re)use the SV in the AV	*/
-	if (dbis->debug >= 2) {
-	    fprintf(DBILOGFP, "      Storing row %d (%s) in %08lx\n",
-		    i, col, (u_long) sv);
-	}
-	if (ChopBlanks) {
-	    while(len && isspace(*col)) {
-	        ++col;
-		--len;
+
+	if (col) {
+#ifdef DBD_MYSQL
+	    STRLEN len = lengths[i];
+#else
+	    STRLEN len = strlen(col);
+#endif
+	    if (ChopBlanks) {
+		while(len && isspace(*col)) {
+		    ++col;
+		    --len;
+		}
+		while(len && isspace(col[len-1])) {
+		    --len;
+		}
 	    }
-	    while(len && isspace(col[len-1])) {
-	        --len;
+
+	    if (dbis->debug >= 2) {
+		fprintf(DBILOGFP, "      Storing row %d (%s) in %08lx\n",
+			i, col, (u_long) sv);
 	    }
+	    sv_setpvn(sv, col, len);
+	} else {
+	    (void) SvOK_off(sv);  /*  Field is NULL, return undef  */
 	}
-	sv_setpvn(sv, col, len);
     }
 
     if (dbis->debug >= 2) {
@@ -934,6 +897,7 @@ int dbd_st_finish(SV* sth) {
 
 void dbd_st_destroy(SV* sth) {
     D_imp_sth(sth);
+    int i;
 
     /*
      *  Free values allocated by dbd_bind_ph
@@ -950,6 +914,16 @@ void dbd_st_destroy(SV* sth) {
 	}
 	Safefree(imp_sth->params);
 	imp_sth->params = NULL;
+    }
+
+    /*
+     *  Free cached array attributes
+     */
+    for (i = 0;  i < AV_ATTRIB_LAST;  i++) {
+	if (imp_sth->av_attr[i]) {
+	    SvREFCNT_dec(imp_sth->av_attr[i]);
+	}
+	imp_sth->av_attr[i] = Nullav;
     }
 
     DBIc_IMPSET_off(imp_sth);           /* let DBI know we've done it   */
@@ -973,7 +947,6 @@ void dbd_st_destroy(SV* sth) {
  **************************************************************************/
 
 int dbd_st_STORE_attrib(SV* sth, SV* keysv, SV* valuesv) {
-    D_imp_sth(sth);
     STRLEN(kl);
     char* key = SvPV(keysv, kl);
     int result = FALSE;
@@ -982,19 +955,6 @@ int dbd_st_STORE_attrib(SV* sth, SV* keysv, SV* valuesv) {
         fprintf(DBILOGFP,
 		"    -> dbd_st_STORE_attrib for %08lx, key %s\n",
 		(u_long) sth, key);
-    }
-
-    switch (*key) {
-      case 'C':
-	if (strEQ(key, "ChopBlanks")) {
-	    if (valuesv && SvTRUE(valuesv)) {
-		DBIc_on(imp_sth, DBIcf_ChopBlanks);
-	    } else {
-		DBIc_off(imp_sth, DBIcf_ChopBlanks);
-	    }
-	    result = TRUE;
-	}
-	break;
     }
 
     if (dbis->debug >= 2) {
@@ -1007,29 +967,207 @@ int dbd_st_STORE_attrib(SV* sth, SV* keysv, SV* valuesv) {
 }
 
 
+/***************************************************************************
+ *
+ *  Name:    dbd_st_FETCH_internal
+ *
+ *  Purpose: Retrieves a statement handles array attributes; we use
+ *           a separate function, because creating the array
+ *           attributes shares much code and it aids in supporting
+ *           enhanced features like caching.
+ *
+ *  Input:   sth - statement handle; may even be a database handle,
+ *               in which case this will be used for storing error
+ *               messages only. This is only valid, if cacheit (the
+ *               last argument) is set to TRUE.
+ *           what - internal attribute number
+ *           res - pointer to a DBMS result
+ *           cacheit - TRUE, if results may be cached in the sth.
+ *
+ *  Returns: RV pointing to result array in case of success, NULL
+ *           otherwise; do_error has already been called in the latter
+ *           case.
+ *
+ **************************************************************************/
+
+#ifndef IS_KEY
+#define IS_KEY(A) (((A) & (PRI_KEY_FLAG | UNIQUE_KEY_FLAG | MULTIPLE_KEY_FLAG)) != 0)
+#endif
+#ifndef IS_NUM
+#ifdef DBD_MYSQL
+#define IS_NUM(A) ((A) >= (int) FIELD_TYPE_DECIMAL && (A) <= FIELD_TYPE_DATETIME)
+#else
+#define IS_NUM(A) ((A) == INT_TYPE || (A) == REAL_TYPE || (A) == UINT_TYPE)
+#endif
+#endif
+
+SV* dbd_st_FETCH_internal(SV* sth, int what, result_t res, int cacheit) {
+    imp_sth_t* imp_sth;
+    AV *av = Nullav;
+    field_t curField;
+
+    /*
+     *  Are we asking for a legal value?
+     */
+    if (what < 0 ||  what >= AV_ATTRIB_LAST) {
+	do_error(sth, JW_ERR_NOT_IMPLEMENTED, "Not implemented");
+
+    /*
+     *  Return cached value, if possible
+     */
+    } else if (cacheit  &&
+	       (imp_sth = (imp_sth_t*) DBIh_COM(sth))->av_attr[what]) {
+	av = imp_sth->av_attr[what];
+
+    /*
+     *  Does this sth really have a result?
+     */
+    } else if (!res) {
+	do_error(sth, JW_ERR_NOT_ACTIVE,
+		 "statement contains no result");
+
+    /*
+     *  Do the real work.
+     */
+    } else {
+	av = newAV();
+	MyFieldSeek(res, 0);
+	while ((curField = MyFetchField(res))) {
+	    SV* sv;
+
+	    switch(what) {
+	      case AV_ATTRIB_NAME:
+		sv = newSVpv(curField->name, strlen(curField->name));
+		break;
+	      case AV_ATTRIB_TABLE:
+		sv = newSVpv(curField->table, strlen(curField->table));
+		break;
+	      case AV_ATTRIB_TYPE:
+		sv = newSViv((int) curField->type);
+		break;
+	      case AV_ATTRIB_IS_PRI_KEY:
+		sv = boolSV(IS_PRI_KEY(curField->flags));
+		break;
+	      case AV_ATTRIB_IS_NOT_NULL:
+		sv = boolSV(IS_NOT_NULL(curField->flags));
+		break;
+	      case AV_ATTRIB_NULLABLE:
+		sv = boolSV(!IS_NOT_NULL(curField->flags));
+		break;
+	      case AV_ATTRIB_LENGTH:
+		sv = newSViv((int) curField->length);
+		break;
+	      case AV_ATTRIB_IS_NUM:
+		sv = boolSV(IS_NUM(curField->flags));
+		break;
+	      case AV_ATTRIB_TYPE_NAME:
+	        {
+		    static struct db_types {
+			int id;
+			const char* name;
+		    } types [] = {
+#ifdef DBD_MYSQL
+			{ FIELD_TYPE_BLOB, "blob" },
+			{ FIELD_TYPE_CHAR, "char" },
+			{ FIELD_TYPE_DECIMAL, "decimal" },
+			{ FIELD_TYPE_DATE, "date" },
+			{ FIELD_TYPE_DATETIME, "datetime" },
+			{ FIELD_TYPE_DOUBLE, "double" },
+			{ FIELD_TYPE_FLOAT, "float" },
+			{ FIELD_TYPE_INT24, "int24" },
+			{ FIELD_TYPE_LONGLONG, "longlong" },
+			{ FIELD_TYPE_LONG_BLOB, "longblob" },
+			{ FIELD_TYPE_LONG, "long" },
+			{ FIELD_TYPE_NULL, "null" },
+			{ FIELD_TYPE_SHORT, "short" },
+			{ FIELD_TYPE_STRING, "string" },
+			{ FIELD_TYPE_TINY_BLOB, "tinyblob" },
+			{ FIELD_TYPE_TIMESTAMP, "timestamp" },
+			{ FIELD_TYPE_TIME, "time" },
+			{ FIELD_TYPE_VAR_STRING, "varstring" }
+#else
+			{ INT_TYPE, "int" },
+			{ CHAR_TYPE, "char" },
+			{ REAL_TYPE, "real" },
+			{ IDENT_TYPE, "ident" },
+			{ IDX_TYPE, "index" },
+			{ TEXT_TYPE, "text" },
+			{ DATE_TYPE, "date" },
+			{ UINT_TYPE, "uint" },
+			{ MONEY_TYPE, "money" },
+			{ TIME_TYPE, "time" },
+			{ SYSVAR_TYPE, "sys" }
+#endif
+		    };
+		    int i, found = FALSE;
+		    for (i = 0;  i < sizeof(types) / sizeof(struct db_types);
+			 i++) {
+			if (curField->type == types[i].id) {
+			    sv = newSVpv((char*) types[i].name,
+					 strlen(types[i].name));
+			    found = TRUE;
+			    break;
+			}
+		    }
+		    if (!found) {
+			sv = newSVpv((char*) "unknown", 7);
+		    }
+		}
+	        break;
+#ifdef DBD_MYSQL
+	      case AV_ATTRIB_MAX_LENGTH:
+		sv = newSViv((int) curField->max_length);
+		break;
+	      case AV_ATTRIB_IS_KEY:
+		sv = boolSV(IS_KEY(curField->flags));
+		break;
+	      case AV_ATTRIB_IS_BLOB:
+		sv = boolSV(IS_BLOB(curField->flags));
+		break;
+#endif
+	    }
+
+	    av_push(av, sv);
+	}
+
+	/*
+	 *  Ensure that this value is kept, decremented in
+	 *  dbd_st_destroy and dbd_st_execute.
+	 */
+	if (cacheit) {
+	    imp_sth->av_attr[what] = (AV*) SvREFCNT_inc((SV*)av);
+	}
+    }
+
+    if (av == Nullav) {
+	return &sv_undef;
+    }
+    return sv_2mortal(newRV_noinc((SV*)av));
+}
+
 
 /***************************************************************************
  *
  *  Name:    dbd_st_FETCH_attrib
  *
- *  Purpose: Retrieves a statement handles attributes; we currently
- *           support just those required by DBI; this will change
- *           in the near future
+ *  Purpose: Retrieves a statement handles attributes
  *
  *  Input:   sth - statement handle being destroyed
  *           keysv - attribute name
  *
- *  Returns: TRUE for success, FALSE otrherwise; do_error will
- *           be called in the latter case
+ *  Returns: NULL for an unknown attribute, "undef" for error,
+ *           attribute value otherwise.
  *
  **************************************************************************/
+
+#define ST_FETCH_AV(what) \
+    dbd_st_FETCH_internal(sth, (what), imp_sth->cda, TRUE)
 
 SV* dbd_st_FETCH_attrib(SV* sth, SV* keysv) {
     D_imp_sth(sth);
     STRLEN(kl);
     char* key = SvPV(keysv, kl);
     SV* retsv = Nullsv;
-    int cacheit = TRUE;
 
     if (dbis->debug >= 2) {
         fprintf(DBILOGFP,
@@ -1038,66 +1176,135 @@ SV* dbd_st_FETCH_attrib(SV* sth, SV* keysv) {
     }
 
     switch (*key) {
-      case 'C':
-	if (strEQ(key, "ChopBlanks")) {
-	    retsv = DBIc_is(imp_sth, DBIcf_ChopBlanks) ? &sv_yes : &sv_no;
-	    cacheit = FALSE;
+      case 'I':
+	/*
+	 *  Deprecated, use lower case versions.
+	 */
+	if (strEQ(key, "IS_PRI_KEY")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_PRI_KEY);
+	} else if (strEQ(key, "IS_NOT_NULL")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_NOT_NULL);
+#ifdef DBD_MYSQL
+	} else if (strEQ(key, "IS_KEY")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_KEY);
+	} else if (strEQ(key, "IS_BLOB")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_BLOB);
+#endif
+	} else if (strEQ(key, "IS_NUM")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_NUM);
 	}
 	break;
+      case 'L':
+	/*
+	 *  Deprecated, use lower case versions.
+	 */
+	if (strEQ(key, "LENGTH")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_LENGTH);
+	}
+	break;
+#ifdef DBD_MYSQL
+      case 'M':
+	/*
+	 *  Deprecated, use max_length
+	 */
+	if (strEQ(key, "MAXLENGTH")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_MAX_LENGTH);
+	}
+	break;
+#endif
       case 'N':
 	if (strEQ(key, "NAME")) {
-	    AV *av;
-	    field_t curField;
-
-	    if (!imp_sth->cda) {
-	        do_error(sth, JW_ERR_NOT_ACTIVE,
-			       "statement contains no result");
-		break;
-	    }
-	    av = newAV();
-	    retsv = newRV(sv_2mortal((SV*)av));
-	    MyFieldSeek(imp_sth->cda, 0);
-	    while ((curField = MyFetchField(imp_sth->cda))) {
-	        av_push(av, newSVpv(curField->name,
-				    strlen(curField->name)));
-	    }
+	    retsv = ST_FETCH_AV(AV_ATTRIB_NAME);
 	} else if (strEQ(key, "NULLABLE")) {
-	    AV *av;
-	    field_t curField;
-
-	    if (!imp_sth->cda) {
-	        do_error(sth, JW_ERR_NOT_ACTIVE,
-			       "statement contains no result");
-		break;
-	    }
-	    av = newAV();
-	    retsv = newRV(sv_2mortal((SV*)av));
-	    MyFieldSeek(imp_sth->cda, 0);
-	    while ((curField = MyFetchField(imp_sth->cda))) {
-	        av_push(av, newSViv((IV) !IS_NOT_NULL(curField->flags)));
-	    }
+	    retsv = ST_FETCH_AV(AV_ATTRIB_NULLABLE);
+	} else if (strEQ(key, "NUMROWS")) {
+	    retsv = sv_2mortal(newSViv((IV)imp_sth->row_num));
+	} else if (strEQ(key, "NUMFIELDS")) {
+	    retsv = sv_2mortal(newSViv((IV) DBIc_NUM_FIELDS(imp_sth)));
+	}
+	break;
+      case 'R':
+	/*
+	 * Deprecated, use 'result'
+	 */
+	if (strEQ(key, "RESULT")) {
+	    retsv = sv_2mortal(newSViv((IV) imp_sth->cda));
+	}
+	break;
+      case 'T':
+	/*
+	 *  Deprecated, use lower case versions.
+	 */
+	if (strEQ(key, "TABLE")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_TABLE);
+	} else if (strEQ(key, "TYPE")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_TYPE);
+	}
+      case 'f':
+	if (strEQ(key, "format_max_size")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_LENGTH);
+#ifdef DBD_MYSQL
+	} else if (strEQ(key, "format_default_size")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_MAX_LENGTH);
+#endif
+	} else if (strEQ(key, "format_right_justify")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_NUM);
+	} else if (strEQ(key, "format_type_name")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_TYPE_NAME);
 	}
 	break;
       case 'i':
 	if (strEQ(key, "insertid")) {
 	    retsv = sv_2mortal(newSViv(imp_sth->insertid));
+	} else if (strEQ(key, "is_pri_key")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_PRI_KEY);
+	} else if (strEQ(key, "is_not_null")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_NOT_NULL);
+#ifdef DBD_MYSQL
+	} else if (strEQ(key, "is_key")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_KEY);
+	} else if (strEQ(key, "is_blob")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_BLOB);
+#endif
+	} else if (strEQ(key, "is_num")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_IS_NUM);
 	}
 	break;
+      case 'l':
+	if (strEQ(key, "length")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_LENGTH);
+	}
+	break;
+#ifdef DBD_MYSQL
+      case 'm':
+	if (strEQ(key, "max_length")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_MAX_LENGTH);
+	}
+	break;
+#endif
+      case 'r':
+	/*
+	 * Deprecated, use 'result'
+	 */
+	if (strEQ(key, "result")) {
+	    retsv = sv_2mortal(newSViv((IV) imp_sth->cda));
+	}
+	break;
+      case 't':
+	if (strEQ(key, "table")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_TABLE);
+	} else if (strEQ(key, "type")) {
+	    retsv = ST_FETCH_AV(AV_ATTRIB_TYPE);
+	}
     }
 
     if (dbis->debug >= 2) {
         fprintf(DBILOGFP,
 		"    <- dbd_st_FETCH_attrib for %08lx, key %s: result %s\n",
-		(u_long) sth, key, SvPV(retsv, na));
+		(u_long) sth, key, retsv ? SvPV(retsv, na) : "NULL");
     }
 
-    if (cacheit) { /* cache for next time (via DBI quick_FETCH)	*/
-	SV **svp = hv_fetch((HV*)SvRV(sth), key, kl, 1);
-	SvREFCNT_dec(*svp);
-	*svp = retsv;
-	(void) SvREFCNT_inc(retsv);	/* so sv_2mortal won't free it	*/
-    }
-    return sv_2mortal(retsv);
+    return retsv;
 }
 
 

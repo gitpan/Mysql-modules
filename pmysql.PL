@@ -29,8 +29,8 @@ $Config{'startperl'}
 
 $script = <<'!NO!SUBS!';
 
-# $Id: pmysql.PL,v 1.1804 1997/08/30 16:00:21 joe Exp $
-my $version = substr q$Revision: 1.1804 $, 10;
+# $Id: pmysql.PL,v 1.1805 1997/09/03 12:19:58 joe Exp $
+my $version = substr q$Revision: 1.1805 $, 10;
 
 BEGIN {require 5.002;}
 # use strict;      # only for testing. Unfriendly for the user-eval()s
@@ -75,23 +75,23 @@ if ($driver eq 'Mysql') {
 	Mysql::FIELD_TYPE_TIME(),
 	Mysql::FIELD_TYPE_VAR_STRING()
     } = qw(
-	blob,
-	char,
-	decimal,
-	date,
-	datetime,
-	double,
-	float,
-	int24,
-	longlong,
-        longblob,
-	long,
-	null,
-	short,
-	string,
-	tinyblob,
-	timestamp,
-	time,
+	blob
+	char
+	decimal
+	date
+	datetime
+	double
+	float
+	int24
+	longlong
+        longblob
+	long
+	null
+	short
+	string
+	tinyblob
+	timestamp
+	time
 	varstring
     );
 } else {
@@ -657,10 +657,6 @@ sub sep_out {
 	$epattern = '';
     }
     $null = 0;
-
-    print "escape = $escape, epattern = $epattern\n";
-    print "quote = $quote, qpattern = $qpattern\n";
-    print "separator = $sepchar\n";
 
     while (@arr = $::Q->fetchrow()) {
 	foreach $word (@arr) {

@@ -21,7 +21,7 @@
  *           Fax: +49 7123 / 14892
  *
  *
- *  $Id: dbdimp.h,v 1.1804 1997/08/30 15:09:42 joe Exp $
+ *  $Id: dbdimp.h,v 1.1805 1997/09/03 12:21:36 joe Exp $
  */
 
 /*
@@ -35,22 +35,25 @@
  *  The following are return codes passed in $h->err in case of
  *  errors by DBD::mysql.
  */
-#define JW_ERR_CONNECT               1
-#define JW_ERR_SELECT_DB             2
-#define JW_ERR_STORE_RESULT          3
-#define JW_ERR_NOT_ACTIVE            4
-#define JW_ERR_QUERY                 5
-#define JW_ERR_FETCH_ROW             6
-#define JW_ERR_LIST_DB               7
-#define JW_ERR_CREATE_DB             8
-#define JW_ERR_DROP_DB               9
-#define JW_ERR_LIST_TABLES           10
-#define JW_ERR_LIST_FIELDS           11
-#define JW_ERR_LIST_FIELDS_INT       12
-#define JW_ERR_LIST_SEL_FIELDS       13
-#define JW_ERR_NO_RESULT             14
-#define JW_ERR_NOT_IMPLEMENTED       15
-#define JW_ERR_ILLEGAL_PARAM_NUM     16
+enum errMsgs {
+    JW_ERR_CONNECT = 1,
+    JW_ERR_SELECT_DB,
+    JW_ERR_STORE_RESULT,
+    JW_ERR_NOT_ACTIVE,
+    JW_ERR_QUERY,
+    JW_ERR_FETCH_ROW,
+    JW_ERR_LIST_DB,
+    JW_ERR_CREATE_DB,
+    JW_ERR_DROP_DB,
+    JW_ERR_LIST_TABLES,
+    JW_ERR_LIST_FIELDS,
+    JW_ERR_LIST_FIELDS_INT,
+    JW_ERR_LIST_SEL_FIELDS,
+    JW_ERR_NO_RESULT,
+    JW_ERR_NOT_IMPLEMENTED,
+    JW_ERR_ILLEGAL_PARAM_NUM,
+    JW_ERR_MEM
+};
 
 
 /*
@@ -59,16 +62,40 @@
  *  Positive values indicate a command returning a result, other
  *  commands have negative values.
  */
-#define COMMAND_UNKNOWN    0
-#define COMMAND_SELECT     1
-#define COMMAND_SYSTABLES  2
-#define COMMAND_CREATE    -1
-#define COMMAND_DROP      -2
-#define COMMAND_INSERT    -3
-#define COMMAND_DELETE    -4
-#define COMMAND_UPDATE    -5
-#define COMMAND_ALTER     -6
+enum command_types {
+    COMMAND_UNKNOWN = 0,
+    COMMAND_SELECT,
+    COMMAND_SYSTABLES,
+    COMMAND_LISTFIELDS,
+    COMMAND_CREATE = -1,
+    COMMAND_DROP = -2,
+    COMMAND_INSERT = -3,
+    COMMAND_DELETE = -4,
+    COMMAND_UPDATE = -5,
+    COMMAND_ALTER = -6
+};
 
+
+/*
+ *  Internal constants, used for fetching array attributes
+ */
+enum av_attribs {
+    AV_ATTRIB_NAME = 0,
+    AV_ATTRIB_TABLE,
+    AV_ATTRIB_TYPE,
+    AV_ATTRIB_IS_PRI_KEY,
+    AV_ATTRIB_IS_NOT_NULL,
+    AV_ATTRIB_NULLABLE,
+    AV_ATTRIB_LENGTH,
+    AV_ATTRIB_IS_NUM,
+    AV_ATTRIB_TYPE_NAME,
+#ifdef DBD_MYSQL
+    AV_ATTRIB_MAX_LENGTH,
+    AV_ATTRIB_IS_KEY,
+    AV_ATTRIB_IS_BLOB,
+#endif
+    AV_ATTRIB_LAST         /*  Dummy attribute, never used, for allocation  */
+};                         /*  purposes only                                */
 
 
 /*
@@ -141,6 +168,7 @@ struct imp_sth_st {
     int   command;        /* Statement command, e.g. COMMAND_SELECT */
     int   insertid;       /* ID of auto insert                      */
     imp_sth_ph_t* params; /* Pointer to parameter array             */
+    AV* av_attr[AV_ATTRIB_LAST];/*  For caching array attributes        */
 };
 
 

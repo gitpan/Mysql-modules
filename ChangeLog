@@ -1,7 +1,34 @@
-$Id: ChangeLog,v 1.1804 1997/08/30 16:00:20 joe Exp $
+$Id: ChangeLog,v 1.1805 1997/09/03 12:19:57 joe Exp $
 
 DBD::mysql for DBI - Written by Jochen Wiedmann <wiedmann@neckar-alb.de>
 
+97.09.03  V1.1805
+	  Fixed bug in DBD::mysql: Executing a non-select statement
+	  always returned -1 (unknown number of rows) although the
+	  correct number was returned by $sth->rows().
+	  Fixed bug in DBD::mysql: strlen was executed on a NULL
+	  value when mysql_fetch_rows returned a NULL field.
+	  Added all _ListField attributes to statement handles.
+	  Added support for "LISTFIELDS <table>" to $sth->execute.
+	  Modified $sth->func("_ListSelectedFields") and
+	  $dbh->func("<table>", "_ListFields") to use the new
+	  possibilities; in fact these are only stubs now.
+	  Added dbimon.
+	  Added some internal attributes for dbimon to DBD::mysql:
+	  format_default_size, format_max_size, format_type_name
+	  and format_right_justification.
+	
+97.08.30  V1.1804
+	  Added "fancy", "quote", "separator" and "escape" commands to
+	  pm(y)sql.PL.
+	  Modified pm(y)sql.PL and pmsql.PL so that it automatically
+	  adapts pm(y)sql for use with Msql and Mysql, respectively.
+	  Makefile.PL and M(y)sqlPerl/Makefile.PL now automatically
+	  adapt lib/M(y)sql.pm, lib/M(y)sql/Statement.pm and
+	  lib/DBD/mSQL.pm or lib/DBD/mysql.pm for use in Msql-modules
+	  or Mysql-modules; just copy these files, rename them and
+	  run "perl Makefile.PL".
+	
 97.08.29  V1.1803
 	  Added mysql_errno()
 	  Modified perl modules for use of $driver and isa($driver).

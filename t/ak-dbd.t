@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: ak-dbd.t,v 1.1804 1997/08/30 15:11:09 joe Exp $
+#   $Id: ak-dbd.t,v 1.1805 1997/09/03 12:22:35 joe Exp $
 #
 #   This is a skeleton test. For writing new tests, take this file
 #   and modify/extend it.
@@ -295,7 +295,7 @@ while (Testing()) {
         or ErrMsg("prepare failed: query $query, error $sth->errmsg.\n");
     # This should fail: We "forgot" execute.
     if ($driver eq 'mysql'  ||  $driver eq 'mSQL'  ||  $driver eq 'mSQL1') {
-        Test($state or !defined($ref = $sth->func('_ListSelectedFields')))
+        Test($state or !defined($sth->{'NAME'}))
             or ErrMsg("Expected error without execute, got $ref.\n");
     }
     Test($state or undef $sth or 1);

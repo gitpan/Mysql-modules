@@ -1,6 +1,6 @@
 /* Hej, Emacs, this is -*- C -*- mode!
 
-   $Id: mysql.xs,v 1.1804 1997/08/30 15:09:43 joe Exp $
+   $Id: mysql.xs,v 1.1805 1997/09/03 12:21:37 joe Exp $
 
    Copyright (c) 1994,1995  Tim Bunce
 
@@ -312,31 +312,6 @@ _ListTables(dbh)
     }
  
 
-
-void
-_ListFields(dbh, tabname)
-    SV* 	dbh
-    char*	tabname
-  PPCODE:
-    D_imp_dbh(dbh);
-    result_t res;
-    if (!tabname || *tabname == '\0') {
-        do_error(dbh, -1,
-	         "Error in _ListFields! Table name was NULL!\n" );
-        return;
-    }
-    res = MyListFields(imp_dbh->svsock, tabname);
-    if (!res) {
-        do_error(dbh, JW_ERR_LIST_FIELDS, MyError(imp_dbh->svsock));
-    } else {
-        SV* rv;
-        if ((rv = dbd_db_fieldlist(res))) {
-            XPUSHs( (SV*)rv );
-            MyFreeResult(res);
-        }
-    }
-
-
 MODULE = DBD::mysql    PACKAGE = DBD::mysql::st
 
 
@@ -539,30 +514,5 @@ _NumRows(sth)
     D_imp_sth(sth);
     EXTEND( sp, 1 );
     PUSHs( sv_2mortal((SV*)newSViv(imp_sth->row_num)));
-
-
-void
-_ListSelectedFields(sth)
-    SV *	sth
-    PPCODE:
-    D_imp_sth(sth);
-    result_t res;
-    SV * rv;
-    /**
-     *  Set up an empty reference in case of error...
-     *  I really have no idea how to do this.
-     */
-    if (!(res = imp_sth->cda)) {
-        do_error(sth, JW_ERR_NO_RESULT,
-                       "missing MSQL_RES in mSQLListSelectedFields!");
-        XPUSHs(Nullsv);
-    } else {
-        if (!(rv = dbd_db_fieldlist(res))) {
-	    do_error(sth, JW_ERR_LIST_FIELDS,
-                           "fieldlist() error in mSQLListSelectedFields!" );
-        } else {
-	    XPUSHs((SV*)rv);
-	}
-    }
 
 # end of mSQL.xs

@@ -1,9 +1,29 @@
 #   Hej, Emacs, don't you see this is -*- perl -*- mode? :-)
 #
+#   Copyright (c) 1997  Andreas König, Jochen Wiedmann
+#
+#  You may distribute this under the terms of either the GNU General Public
+#  License or the Artistic License, as specified in the Perl README file,
+#  with the exception that it cannot be placed on a CD-ROM or similar media
+#  for commercial distribution without the prior approval of the author.
+#
+#  $Id: Makefile.PL,v 1.1805 1997/09/03 12:19:57 joe Exp $
+#
 BEGIN {require 5.003;}
 use ExtUtils::MakeMaker;
 use Config;
 # use strict; # we're possibly still 5.002 compliant ?
+
+$| = 1;
+print "Checking for DBI, 0.84 or later ... ";
+eval { use DBI 0.84 (); };
+if ($@) {
+    print STDERR "\nYou must have installed the 'DBI' module,\n";
+    print STDERR "version 0.84 or later. You get it at the CPAN.\n";
+    print STDERR "See 'man CPAN' or 'perldoc CPAN' for more info.\n";
+    exit 10;
+}
+print "ok\n";
 
 $Verbose++ if $ENV{USER} eq "k";
 
@@ -14,10 +34,11 @@ WriteMakefile(
 				  'DIST_DEFAULT' => 'all tardist',
 				  'COMPRESS'     => "gzip -9f" },
 	      'VERSION_FROM' => "lib/Mysql.pm",
-	      'EXE_FILES'    => [qw(pmysql)],
+	      'EXE_FILES'    => [qw(pmysql dbimon)],
 	      'PREREQ_PM'    => { 'DBI' => 0.88 },
 	      'CONFIGURE'    => \&Mysql::Config::initialize,
-	      'clean'        => { 'FILES' => "*.bak */*.bak */*/*.bak pmysql" }
+	      'clean'        => { 'FILES' => "*.bak */*.bak */*/*.bak"
+				             . " pmysql dbimon" }
 );
 
 package MY;	# so that "SUPER" works right
@@ -68,6 +89,57 @@ sub Modify ($$$) {
 	exit 10;
     }
     unlink "$dest.bak";
+}
+
+
+sub CheckForLibGcc() {
+    # For reasons I don't understand the 'specs' file of some
+    # gcc versions disable linking against libgcc.a in conjunction
+    # with '-shared'. Unfortunately we need libgcc.a because of
+    # some arithmetic functions.
+    #
+    # We check this by looking into gcc's "specs" file. If there
+    # is a line saying
+    #
+    #    %{!shared:-lgcc}
+    #
+    # we assume a broken gcc.
+    #
+    if ($Config{gccversion} eq '') {
+	return '';
+    }
+
+    my $specs = `$Config{cc} -v 2>&1`;
+    if ($specs !~ /Reading specs from (\S+)/) {
+	return;
+    }
+
+    $specs = $1;
+    if (!open(FILE, "<$specs")) {
+	return;
+    }
+
+    my $line;
+    my $extralibs = '';
+    while (defined($line = <FILE>)) {
+	if ($line =~ /\%\{\!shared\:\-lgcc\}/) {
+	    my $libgccdir = $specs;
+	    $libgccdir =~ s/\/[^\/]+$//;
+	    print("\nYour building on ", $Config{'osname'}, " with gcc.",
+		  " According to your specs file\n    $specs\n",
+		  "your gcc doesn't seem to link against libgcc.a when ",
+		  " building shared libraries.\n",
+		  "I assume that your libmysqlclient.a will need __moddi3",
+		  " and __divdi3,\n",
+		  "so lets be cautious and add a '-lgcc' to the linker",
+		  " flags.\n\n");
+	    $extralibs = "-L$libgccdir -lgcc";
+	    last;
+	}
+    }
+    close(FILE);
+
+    return $extralibs;
 }
 
 
@@ -175,46 +247,9 @@ the subdirs lib/ and include/.",$gooddir) || $gooddir # || for 5.002
 	      " distribution specifying\n",
 	      "the '", $Config{cccdlflags}, "' flag",
 	      " of your C compiler.\n");
-    } elsif ($Config{osname} eq 'linux'  &&  $Config{gccversion} ne '') {
-	# For reasons I don't understand the 'specs' file of some
-	# gcc versions disable linking against libgcc.a in conjunction
-	# with '-shared'. Unfortunately we need libgcc.a because of
-	# some arithmetic functions.
-	#
-	# We check this by looking into gcc's "specs" file. If there
-	# is a line saying
-	#
-	#    %{!shared:-lgcc}
-	#
-	# we assume a broken gcc.
-	#
-	my $specs = `$Config{cc} -v 2>&1`;
-	if ($specs =~ /Reading specs from (\S+)/) {
-	    $specs = $1;
-	    print "Found specs file $specs.\n";
-	    if (open(FILE, "<$specs")) {
-		my $line;
-		while (defined($line = <FILE>)) {
-		    if ($line =~ /\%\{\!shared\:\-lgcc\}/) {
-			my $libgccdir = $specs;
-			$libgccdir =~ s/\/[^\/]+$//;
-			print("\nYour building on Linux with gcc. According",
-			      " to your specs file\n",
-			      "    $specs\n",
-			      "your gcc doesn't seem to link against libgcc.a",
-			      " when building shared libraries.\n",
-			      "I assume that your libmysqlclient.a will",
-			      " need __moddi3 and __divdi3,\n",
-			      "so lets be cautious and add a '-lgcc' to the",
-			      " linker flags.\n\n");
-			$extralibs = "-L$libgccdir -lgcc";
-			last;
-		    }
-		}
-		close(FILE);
-	    }
-	}
     }
+
+    $extralibs .= CheckForLibGcc();
 
     # List the libraries we're linking with (ADESC)
     my $sysliblist = ["-L$libdir -lmysqlclient -lm $extralibs"];

@@ -13,6 +13,7 @@ DBD-mysql/dbdimp.h
 DBD-mysql/myMsql.c		Library file for common Msql/Mysql sources
 DBD-mysql/myMsql.h		Header file for common Msql/Mysql sources
 DBD-mysql/mysql.xs
+dbimon.PL
 lib/DBD/mysql.pm
 lib/Mysql/Statement.pm
 lib/Mysql.pm
