@@ -3,8 +3,8 @@ package Mysql::Statement;
 use strict;
 use vars qw($OPTIMIZE $VERSION $AUTOLOAD);
 
-$VERSION = substr q$Revision: 1.1810 $, 10;
-# $Id: Statement.pm,v 1.1810 1997/09/12 23:54:30 joe Exp $
+$VERSION = substr q$Revision: 1.18.12.1 $, 10;
+# $Id: Statement.pm,v 1.18.12.1 1997/09/27 14:32:41 joe Exp $
 
 $OPTIMIZE = 0; # controls, which optimization we default to
 

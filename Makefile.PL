@@ -7,7 +7,7 @@
 #  with the exception that it cannot be placed on a CD-ROM or similar media
 #  for commercial distribution without the prior approval of the author.
 #
-#  $Id: Makefile.PL,v 1.1810 1997/09/12 23:53:38 joe Exp $
+#  $Id: Makefile.PL,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
 #
 BEGIN {require 5.003;}
 use ExtUtils::MakeMaker;
@@ -17,7 +17,7 @@ use Config;
 $| = 1;
 print "Checking for Data::ShowTable ... ";
 $@ = '';
-eval q{ use Data::ShowTable (); };
+eval { require Data::ShowTable; };
 if ($@) {
     print STDERR "\n\n";
     print STDERR "You don't have installed the 'Data::ShowTable' module.\n";

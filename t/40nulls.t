@@ -1,23 +1,9 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 40nulls.t,v 1.1810 1997/09/12 23:54:34 joe Exp $
+#   $Id: 40nulls.t,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
 #
 #   This is a test for correctly handling NULL values.
 #
-
-
-#
-#   List of drivers that may execute this test; if this list is
-#   empty, than any driver may execute the test.
-#
-#@DRIVERS_ALLOWED = ();
-
-
-#
-#   List of drivers that may not execute this test; this list is
-#   only used if @DRIVERS_ALLOWED is empty
-#
-#@DRIVERS_DENIED = ();
 
 
 #
@@ -34,12 +20,12 @@ $test_password = '';
 use DBI;
 use vars qw($COL_NULLABLE);
 
-$driver = "";
+$mdriver = "";
 foreach $file ("lib.pl", "t/lib.pl") {
     do $file; if ($@) { print STDERR "Error while executing lib.pl: $@\n";
 			   exit 10;
 		      }
-    if ($driver ne '') {
+    if ($mdriver ne '') {
 	last;
     }
 }
@@ -89,7 +75,7 @@ while (Testing()) {
            or DbiError($dbh->err, $dbh->errstr);
 
     Test($state or $cursor = $dbh->prepare("SELECT * FROM $table"
-	                                   . " WHERE id = NULL"))
+	                                   . " WHERE " . IsNull("id")))
            or DbiError($dbh->err, $dbh->errstr);
 
     Test($state or $cursor->execute)

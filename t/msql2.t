@@ -2,7 +2,9 @@
 
 BEGIN {
     do ((-f "lib.pl") ? "lib.pl" : "t/lib.pl");
-    if ($driver eq "mysql") { print "1..0\n"; exit 0; }
+    if ($mdriver ne "mSQL" && $mdriver ne "mSQL1") {
+	print "1..0\n"; exit 0;
+    }
     $| = 1;
     eval "use Msql";
     my $db = Msql->connect();

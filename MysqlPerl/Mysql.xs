@@ -486,7 +486,7 @@ errno(handle=NULL)
      XSRETURN_UNDEF;
    }
 #else
-   RETVAL = MyError(sock);
+   RETVAL = -1;  /*  AFAIK Msql doesn't support numeric error codes  */
 #endif
 }
    OUTPUT:

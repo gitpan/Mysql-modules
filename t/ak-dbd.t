@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: ak-dbd.t,v 1.1810 1997/09/12 23:54:34 joe Exp $
+#   $Id: ak-dbd.t,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
 #
 #   This is a skeleton test. For writing new tests, take this file
 #   and modify/extend it.
@@ -8,23 +8,10 @@
 
 
 #
-#   List of drivers that may execute this test; if this list is
-#   empty, than any driver may execute the test.
-#
-#@DRIVERS_ALLOWED = ();
-
-
-#
-#   List of drivers that may not execute this test; this list is
-#   only used if @DRIVERS_ALLOWED is empty
-#
-#@DRIVERS_DENIED = ();
-
-
-#
 #   Make -w happy
 #
-use vars qw($test_dsn $test_user $test_password $driver $verbose $state);
+use vars qw($test_dsn $test_user $test_password $dbdriver $mdriver
+	    $verbose $state);
 use vars qw($COL_NULLABLE $COL_KEY);
 $test_dsn = '';
 $test_user = '';
@@ -36,13 +23,13 @@ $test_password = '';
 #
 use DBI;
 use strict;
-$driver = "";
+$dbdriver = "";
 {   my $file;
     foreach $file ("lib.pl", "t/lib.pl") {
 	do $file; if ($@) { print STDERR "Error while executing lib.pl: $@\n";
 			    exit 10;
 			}
-	if ($driver ne '') {
+	if ($dbdriver ne '') {
 	    last;
 	}
     }
@@ -58,19 +45,6 @@ if ($test_dsn =~ /^DBI\:[^\:]+\:/) {
 	$test_hostname = $';
     }
 }
-
-sub ErrMsg (@) {
-    if ($verbose) {
-	print (@_);
-    }
-}
-
-sub ErrMsgF (@) {
-    if ($verbose) {
-	printf (@_);
-    }
-}
-
 
 #
 #   Main loop; leave this untouched, put tests after creating
@@ -121,7 +95,7 @@ while (Testing()) {
 
     ### List all the tables in the selected database........
     ### This test for mSQL and mysql only.
-    if ($driver eq 'mysql'  or $driver eq 'mSQL' or $driver eq 'mSQL1') {
+    if ($mdriver eq 'mysql'  or $mdriver eq 'mSQL' or $mdriver eq 'mSQL1') {
 	Test($state or $dbh->func('_ListTables'))
 	    or ErrMsgF("_ListTables failed: $dbh->errstr.\n"
 		       . "This could be due to the fact you have no tables,"
@@ -129,7 +103,7 @@ while (Testing()) {
 		       . "could try running '%s -h %s %s' and see if it\n"
 		       . "reports any information about your database,"
 		       . " or errors.\n",
-		       ($driver eq 'mysql') ? "mysqlshow" : "relshow",
+		       ($mdriver eq 'mysql') ? "mysqlshow" : "relshow",
 		       $test_hostname, $test_db);
     }
 
@@ -142,7 +116,7 @@ while (Testing()) {
         or ErrMsg("create failed, query $query, error $dbh->errstr.\n");
 
     ### Get some meta-data for the table we've just created...
-    if ($driver eq 'mysql' or $driver eq 'mSQL1' or $driver eq 'mSQL') {
+    if ($mdriver eq 'mysql' or $mdriver eq 'mSQL1' or $mdriver eq 'mSQL') {
 	my $ref;
 	Test($state or ($ref = $dbh->func($test_table, '_ListFields')))
 	    or ErrMsg("_ListFields failed: $dbh->errstr.\n");
@@ -193,22 +167,15 @@ while (Testing()) {
     Test($state or ($sth = $dbh->prepare($query = "SELECT * FROM $test_table"
 					          . " WHERE id = 1")))
 	or ErrMsgF("prepare failed: query $query, error %s.\n", $dbh->errstr);
-    if ($driver eq 'mysql'  ||  $driver eq 'mSQL'  ||  $driver eq 'mSQL1') {
-	Test($state or defined($sth->func('_NumRows')))
-	    or ErrMsg("_NumRows returning result before 'execute'.\n");
+    if ($dbdriver eq 'mysql'  ||  $dbdriver eq 'mSQL'  ||
+	$dbdriver eq 'mSQL1') {
+	Test($state or defined($sth->rows))
+	    or ErrMsg("sth->rows returning result before 'execute'.\n");
     }
-    Test($state or defined($sth->rows))
-	or ErrMsg("sth->rows returning result before 'execute'.\n");
-
 
     Test($state or $sth->execute)
 	or ErrMsgF("execute failed: query $query, error %s.\n", $sth->errstr);
-    if ($driver eq 'mysql'  ||  $driver eq 'mSQL'  ||  $driver eq 'mSQL1') {
-	Test($state or ($sth->func('_NumRows') == 1))
-	    or ErrMsgF("_NumRows returned wrong result %s after 'execute'.\n",
-		       $sth->func('_NumRows'));
-    }
-    Test($state or $sth->rows == 1)
+    Test($state  or  ($sth->rows == 1)  or  ($sth->rows == -1))
 	or ErrMsgF("sth->rows returned wrong result %s after 'execute'.\n",
 		   $sth->rows);
     Test($state or $sth->finish)
@@ -220,7 +187,7 @@ while (Testing()) {
     $query = "INSERT INTO $test_table VALUES ( NULL, 'NULL-valued id' )";
     Test($state or $dbh->do($query))
 	or ErrMsgF("INSERT failed: query $query, error %s.\n", $dbh->errstr);
-    $query = "SELECT id FROM $test_table WHERE id = NULL";
+    $query = "SELECT id FROM $test_table WHERE " . IsNull("id");
     Test($state or ($sth = $dbh->prepare($query)))
 	or ErrMsgF("Cannot prepare, query = $query, error %s.\n",
 		   $dbh->errstr);
@@ -273,7 +240,7 @@ while (Testing()) {
 	or ErrMsg("prepare failed: query $query, error $dbh->errstr.\n");
     Test($state or $sth->execute)
 	or ErrMsg("execute failed: query $query, error $dbh->errstr.\n");
-    if ($driver eq 'mysql'  ||  $driver eq 'mSQL'  ||  $driver eq 'mSQL1') {
+    if ($mdriver eq 'mysql'  ||  $mdriver eq 'mSQL'  ||  $mdriver eq 'mSQL1') {
 	Test($state or ($ref = $sth->func('_ListSelectedFields')))
 	    or ErrMsg("_ListSelectedFields failed, error $sth->errstr.\n");
     }
@@ -294,7 +261,8 @@ while (Testing()) {
     Test($state or ($sth = $dbh->prepare($query)))
         or ErrMsg("prepare failed: query $query, error $sth->errmsg.\n");
     # This should fail: We "forgot" execute.
-    if ($driver eq 'mysql'  ||  $driver eq 'mSQL'  ||  $driver eq 'mSQL1') {
+    if ($mdriver eq 'mysql'  ||  $mdriver eq 'mSQL'  ||
+	$mdriver eq 'mSQL1') {
         Test($state or !defined($sth->{'NAME'}))
             or ErrMsg("Expected error without execute, got $ref.\n");
     }
@@ -311,12 +279,12 @@ while (Testing()) {
     # method that was valid up to version 0.66 or so?
 
     # undocumented, will go away, transition variable
-    if ($driver eq 'mSQL'  ||  $driver eq 'mSQL1') {
+    if ($mdriver eq 'mSQL'  ||  $mdriver eq 'mSQL1') {
         $DBD::mSQL::QUIET = $DBD::mSQL::QUIET = 1;
         $DBD::mysql::QUIET = $DBD::mysql::QUIET = 1;
         # We fill in the username. Bad thing.
         Test($state or ($dbh = DBI->connect($test_hostname, $test_db,
-                                            '', $driver)))
+                                            '', $mdriver)))
             or ErrMsgF("connect failed: %s.\n", $DBI::errstr);
     }
     Test($state or $dbh->disconnect)

@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 00base.t,v 1.1810 1997/09/12 23:54:33 joe Exp $
+#   $Id: 00base.t,v 1.18.12.1 1997/09/27 14:32:41 joe Exp $
 #
 #   This is the base test, tries to install the drivers. Should be
 #   executed as the very first test.
@@ -10,16 +10,16 @@
 #
 #   Include lib.pl
 #
-$driver = "";
+$mdriver = "";
 foreach $file ("lib.pl", "t/lib.pl") {
     do $file; if ($@) { print STDERR "Error while executing lib.pl: $@\n";
 			   exit 10;
 		      }
-    if ($driver ne '') {
+    if ($mdriver ne '') {
 	last;
     }
 }
-if ($verbose) { print "Driver is $driver\n"; }
+if ($verbose) { print "Driver is $mdriver\n"; }
 
 # Base DBD Driver Test
 
@@ -35,7 +35,7 @@ $switch = DBI->internal;
 (ref $switch eq 'DBI::dr') ? print "ok 3\n" : print "not ok 3\n";
 
 # This is a special case. install_driver should not normally be used.
-$drh = DBI->install_driver($driver);
+$drh = DBI->install_driver($mdriver);
 
 (ref $drh eq 'DBI::dr') ? print "ok 4\n" : print "not ok 4\n";
 

@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 10dsnlist.t,v 1.1810 1997/09/12 23:54:33 joe Exp $
+#   $Id: 10dsnlist.t,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
 #
 #   This test creates a database and drops it. Should be executed
 #   after listdsn.
@@ -8,34 +8,23 @@
 
 
 #
-#   List of drivers that may execute this test; if this list is
-#   empty, than any driver may execute the test.
-#
-#@DRIVERS_ALLOWED = ();
-
-
-#
-#   List of drivers that may not execute this test; this list is
-#   only used if @DRIVERS_ALLOWED is empty
-#
-@DRIVERS_DENIED = @DRIVERS_DENIED = ('pNET');
-
-
-#
 #   Include lib.pl
 #
-use DBI 0.88;
-$driver = "";
-$test_dsn = $test_user = $test_password = ""; # Hate -w  :-)
+require DBI;
+$mdriver = "";
 foreach $file ("lib.pl", "t/lib.pl") {
     do $file; if ($@) { print STDERR "Error while executing lib.pl: $@\n";
 			   exit 10;
 		      }
-    if ($driver ne '') {
+    if ($mdriver ne '') {
 	last;
     }
 }
-if ($verbose) { print "Driver is $driver\n"; }
+if ($mdriver eq 'pNET'  ||  $mdriver eq 'ODBC') {
+    print "1..0\n";
+    exit 0;
+}
+if ($verbose) { print "Driver is $mdriver\n"; }
 
 sub ServerError() {
     print STDERR ("Cannot connect: ", $DBI::errstr, "\n",
@@ -57,13 +46,18 @@ while (Testing()) {
 					$test_password)))
 	or ServerError();
 
-    Test($state or defined(@dsn = DBI->data_sources($driver)));
+    Test($state or defined(@dsn = DBI->data_sources($mdriver)));
     if (!$state  &&  $verbose) {
 	my $d;
-	print "List of $driver data sources:\n";
+	print "List of $mdriver data sources:\n";
 	foreach $d (@dsn) {
 	    print "    $d\n";
 	}
 	print "List ends.\n";
     }
 }
+
+exit 0;
+
+# Hate -w :-)
+$test_dsn = $test_user = $test_password = $DBI::errstr;

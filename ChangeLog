@@ -1,7 +1,18 @@
-$Id: ChangeLog,v 1.1810 1997/09/12 23:53:36 joe Exp $
+$Id: ChangeLog,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
 
 DBD::mysql for DBI - Written by Jochen Wiedmann <wiedmann@neckar-alb.de>
 
+97.09.27 V1.1812
+          Added t/50commit.t to test suite.
+	  Included <embed.h> in myMsql.h for redefining my_setenv().
+	  Made AutoCommit, Commit and Rollback DBI conformant.
+	  Fixed reconnect problems with Mysql: mysql_port was 0 on some
+	  systems.
+	  Added support of mysql_real_connect to myMsql.c.
+	  Fixed Msql::errno returning a char*.
+	  Added lib/Bundle::Mysql.pm.
+          Fixed 'use Mysql' to 'require Mysql' in t/mysql2.t.
+	
 97.09.12 V1.1810
 	  Fixed bug in dbd_st_FETCH_internal: newRV_noinc was used for
 	  the return value. This resulted in invalid cache values,

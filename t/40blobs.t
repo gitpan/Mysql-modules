@@ -1,25 +1,10 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 40blobs.t,v 1.1810 1997/09/12 23:54:33 joe Exp $
+#   $Id: 40blobs.t,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
 #
 #   This is a test for correct handling of BLOBS; namely $dbh->quote
 #   is expected to work correctly.
 #
-
-
-#
-#   List of drivers that may execute this test; if this list is
-#   empty, than any driver may execute the test.
-#
-#@DRIVERS_ALLOWED = ();
-
-
-#
-#   List of drivers that may not execute this test; this list is
-#   only used if @DRIVERS_ALLOWED is empty
-#
-@DRIVERS_DENIED = ();   # Make -w happy
-@DRIVERS_DENIED = ('mSQL', 'mSQL1');
 
 
 #
@@ -34,19 +19,23 @@ $test_password = '';
 #
 #   Include lib.pl
 #
-use DBI;
-$driver = "";
+require DBI;
+$mdriver = "";
 foreach $file ("lib.pl", "t/lib.pl") {
     do $file; if ($@) { print STDERR "Error while executing lib.pl: $@\n";
 			   exit 10;
 		      }
-    if ($driver ne '') {
+    if ($mdriver ne '') {
 	last;
     }
 }
+if ($dbdriver eq 'mSQL'  ||  $dbdriver eq 'mSQL1') {
+    print "1..0\n";
+    exit 0;
+}
 
 sub ServerError() {
-
+    my $err = $DBI::errstr; # Hate -w ...
     print STDERR ("Cannot connect: ", $DBI::errstr, "\n",
 	"\tEither your server is not up and running or you have no\n",
 	"\tpermissions for acessing the DSN $test_dsn.\n",
@@ -109,10 +98,9 @@ while (Testing()) {
 	    for ($i = 0;  $i < $size;  $i++) {
 		$blob .= $b;
 	    }
-	    if ($driver eq 'pNET') {
+	    if ($mdriver eq 'pNET') {
 		# Quote manually, no remote quote
-		use DBD::mysql;
-		$qblob = DBD::mysql::db->quote($blob);
+		$qblob = eval "DBD::" . $dbdriver . "::db->quote(\$blob)";
 	    } else {
 		$qblob = $dbh->quote($blob);
 	    }

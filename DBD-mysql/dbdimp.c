@@ -21,17 +21,13 @@
  *           Fax: +49 7123 / 14892
  *
  *
- *  $Id: dbdimp.c,v 1.1810 1997/09/12 23:54:13 joe Exp $
+ *  $Id: dbdimp.c,v 1.18.12.1 1997/09/27 14:32:42 joe Exp $
  */
 
 
 #include "dbdimp.h"
 
 DBISTATE_DECLARE;
-
-static SV* dbd_errnum = NULL;
-static SV* dbd_errstr = NULL;
-
 
 #if defined(DBD_MYSQL)  &&  defined(mysql_errno)
 #define DO_ERROR(h, c, s) do_error(h, (int) mysql_errno(s), mysql_error(s))
@@ -56,19 +52,12 @@ static SV* dbd_errstr = NULL;
 
 void dbd_init(dbistate_t* dbistate) {
     DBIS = dbistate;
-#ifdef DBD_MYSQL
-    dbd_errnum = GvSV(gv_fetchpv("DBD::mysql::err",    1, SVt_IV));
-    dbd_errstr = GvSV(gv_fetchpv("DBD::mysql::errstr", 1, SVt_PV));
-#else
-    dbd_errnum = GvSV(gv_fetchpv("DBD::mSQL::err",    1, SVt_IV));
-    dbd_errstr = GvSV(gv_fetchpv("DBD::mSQL::errstr", 1, SVt_PV));
-#endif
 }
 
 
 /***************************************************************************
  *
- *  Name:    do_error
+ *  Name:    do_error, do_warn
  *
  *  Purpose: Called to associate an error code and an error message
  *           to some handle
@@ -90,6 +79,17 @@ void do_error(SV* h, int rc, char* what) {
     if (dbis->debug >= 2)
 	fprintf(DBILOGFP, "%s error %d recorded: %s\n",
 		what, rc, SvPV(errstr,na));
+}
+void do_warn(SV* h, int rc, char* what) {
+    D_imp_xxh(h);
+    SV *errstr = DBIc_ERRSTR(imp_xxh);
+    sv_setiv(DBIc_ERR(imp_xxh), (IV)rc);	/* set err early	*/
+    sv_setpv(errstr, what);
+    DBIh_EVENT2(h, WARN_event, DBIc_ERR(imp_xxh), errstr);
+    if (dbis->debug >= 2)
+	fprintf(DBILOGFP, "%s warning %d recorded: %s\n",
+		what, rc, SvPV(errstr,na));
+    warn("%s", what);
 }
 
 
@@ -191,13 +191,15 @@ int dbd_db_login(SV* dbh, imp_dbh_t* imp_dbh, char* dbname, char* user,
  **************************************************************************/
 
 int dbd_db_commit(SV* dbh, imp_dbh_t* imp_dbh) {
+    do_warn(dbh, JW_ERR_NOT_IMPLEMENTED,
+	    "Commmit ineffective while AutoCommit is on");
     return TRUE;
 }
 
 int dbd_db_rollback(SV* dbh, imp_dbh_t* imp_dbh) {
     do_error(dbh, JW_ERR_NOT_IMPLEMENTED,
-		   "Rollback not implemented in mysql");
-    return 0;
+	    "Rollback ineffective while AutoCommit is on");
+    return FALSE;
 }
 
 
@@ -316,8 +318,8 @@ int dbd_db_STORE_attrib(SV* dbh, imp_dbh_t* imp_dbh, SV* keysv, SV* valuesv) {
 	 */
         if (!SvTRUE(valuesv)) {
 	    do_error(dbh, JW_ERR_NOT_IMPLEMENTED,
-			   "Transactions not supported by mysql");
-	    return FALSE;
+			   "Transactions not supported by database");
+	    croak("Transactions not supported by database");
 	}
     } else {
         return FALSE;
@@ -542,8 +544,6 @@ int dbd_st_prepare(SV* sth, imp_sth_t* imp_sth, char* statement, SV* attribs) {
  *
  *  Input:   sth - statement handle being initialized
  *           imp_sth - drivers private statement handle data
- *           statement - pointer to string with SQL statement
- *           attribs - statement attributes, currently not in use
  *
  *  Returns: TRUE for success, FALSE otherwise; do_error will
  *           be called in the latter case

@@ -24,6 +24,12 @@ my(
 do ((-f "lib.pl") ? "lib.pl" : "t/lib.pl");
 if ($@) { die "Cannot load 'lib.pl': $@.\n"; }
 
+use vars qw($mdriver);
+if ($mdriver ne 'mysql'  &&  $mdriver ne 'mSQL'  &&  $mdriver ne 'mSQL1') {
+    print "1..0\n";
+    exit 0;
+}
+
 $::listTablesHook = $::listTablesHook = sub ($) {
     my($dbh) = shift; $dbh->listtables;
 };
@@ -37,8 +43,8 @@ $::listTablesHook = $::listTablesHook = sub ($) {
 
 my $host = shift @ARGV || "";
 
-use vars qw($driver $verbose $state $COL_NULLABLE $COL_KEY $testNum);
-if ($driver eq 'mysql') {
+use vars qw($mdriver $verbose $state $COL_NULLABLE $COL_KEY $testNum);
+if ($mdriver eq 'mysql') {
     $class = 'Mysql';
     eval "use $class";
     $Mysql::db_errstr = '';
@@ -182,7 +188,7 @@ while (Testing()) {
     Test($state or ($sth->numrows == 3))
 	or !$verbose or printf("Wrong number of rows, expected %d, got %d.\n",
 			      3, $sth->numrows);
-    if ($driver eq 'mysql') {
+    if ($mdriver eq 'mysql') {
 	Test($state or ($sth->numfields == 3))
 	    or !$verbose or printf("Wrong number of fields, expected %d,"
 				   . " got %d.\n",
@@ -214,7 +220,7 @@ while (Testing()) {
     # Msql. That is why you have to say 'use Msql'. The functions are
     # really constants, but that's the way headerfile constants are
     # handled in perl5 up to 5.001m (will probably change soon)
-    my $expected = ($driver eq 'mysql') ?
+    my $expected = ($mdriver eq 'mysql') ?
 	Mysql::FIELD_TYPE_STRING() : Msql::CHAR_TYPE();
     Test($state or ($sth->type->[0] eq $expected), undef,
 	 'Checking $sth->type')
@@ -389,7 +395,7 @@ while (Testing()) {
 			       . " got %s.\n",
 			       "test", $dbh2->database);
     if (!$state) {
-	$i = ($driver eq 'mysql') ? $dbh2->sockfd : $dbh2->sock;
+	$i = ($mdriver eq 'mysql') ? $dbh2->sockfd : $dbh2->sock;
     }
 
     Test($state or ($i =~ /^\d+$/))
@@ -579,7 +585,7 @@ while (Testing()) {
 	local($Msql::QUIET) = 1;
 	eval 'use vars qw($ref); $ref = $sth->fetchrow;';
     }
-    if ($driver eq 'mysql') {
+    if ($mdriver eq 'mysql') {
 	Test($state or ($@ eq ''), undef,
 	     "Fetchrow from non-select handle $sth")
 	    or !$verbose or printf("Died while fetching a row from a"
@@ -670,7 +676,7 @@ while (Testing()) {
     # Although it is a bad idea to specify constants in lowercase,
     # I have to test if it is supported as it has been documented:
 
-    if ($driver ne 'mysql') {
+    if ($mdriver ne 'mysql') {
 	Test($state or ($class->int___type() == $class->INT_TYPE()))
 	    or !$verbose or printf("Expected int___type to be %d, got %d.\n",
 				   $class->INT_TYPE(), $class->int___type);
@@ -707,7 +713,7 @@ while (Testing()) {
 	while (%hash = $sth->fetchhash) {
 	    if ($hash{'chr'} ne chr($hash{'ascii'})) {
 		# mysql chops blanks at the right side ..
-		if ($driver ne 'mysql'  or  $hash{'ascii'} ne 32) {
+		if ($mdriver ne 'mysql'  or  $hash{'ascii'} ne 32) {
 		    $ok = 0;
 		    last;
 		}
@@ -722,7 +728,7 @@ while (Testing()) {
 
     Test($state or ($sth = $dbh->query("drop table $firsttable")))
 	or test_error($dbh);
-    if ($driver eq 'mysql') {
+    if ($mdriver eq 'mysql') {
 	Test($state or ($sth->numfields == 0))
 	    or !$verbose or printf("Expected num fields being zero, not %s.\n",
 				   $sth->numfields);
@@ -757,7 +763,7 @@ while (Testing()) {
 	}
 
 	Test($state or ($dbh->listfields($created[0])->numfields != 0))
-	    or !$verbose or ($driver eq 'mysql')
+	    or !$verbose or ($mdriver eq 'mysql')
 	    or printf STDERR ("Your version %s of the msqld has a"
 			      . " serious bug,\n"
 			      . "upgrade the server to something"

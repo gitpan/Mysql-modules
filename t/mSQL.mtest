@@ -1,0 +1,9 @@
+# Hej, Emacs, give us -*- perl -*- mode here!
+#
+#   $Id: mSQL.mtest,v 1.18.12.1 1997/09/27 14:32:41 joe Exp $
+#
+# module specific definitions for an 'mSQL' database
+
+
+
+1;

@@ -1,23 +1,9 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 30insertfetch.t,v 1.1810 1997/09/12 23:54:33 joe Exp $
+#   $Id: 30insertfetch.t,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
 #
 #   This is a simple insert/fetch test.
 #
-
-
-#
-#   List of drivers that may execute this test; if this list is
-#   empty, than any driver may execute the test.
-#
-#@DRIVERS_ALLOWED = ();
-
-
-#
-#   List of drivers that may not execute this test; this list is
-#   only used if @DRIVERS_ALLOWED is empty
-#
-#@DRIVERS_DENIED = ();
 
 
 #
@@ -32,12 +18,12 @@ $test_password = '';
 #   Include lib.pl
 #
 use DBI;
-$driver = "";
+$mdriver = "";
 foreach $file ("lib.pl", "t/lib.pl") {
     do $file; if ($@) { print STDERR "Error while executing lib.pl: $@\n";
 			   exit 10;
 		      }
-    if ($driver ne '') {
+    if ($mdriver ne '') {
 	last;
     }
 }

@@ -1,44 +1,27 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 20createdrop.t,v 1.1810 1997/09/12 23:54:33 joe Exp $
+#   $Id: 20createdrop.t,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
 #
 #   This is a skeleton test. For writing new tests, take this file
 #   and modify/extend it.
 #
 
-
-#
-#   List of drivers that may execute this test; if this list is
-#   empty, than any driver may execute the test.
-#
-#@DRIVERS_ALLOWED = ();
-
-
-#
-#   List of drivers that may not execute this test; this list is
-#   only used if @DRIVERS_ALLOWED is empty
-#
-#@DRIVERS_DENIED = ();
-
-
-#
-#   Make -w happy
-#
-$test_dsn = '';
-$test_user = '';
-$test_password = '';
+use strict;
+use vars qw($test_dsn $test_user $test_password $mdriver $dbdriver);
+$DBI::errstr = '';  # Make -w happy
+require DBI;
 
 
 #
 #   Include lib.pl
 #
-use DBI;
-$driver = "";
+$mdriver = "";
+my $file;
 foreach $file ("lib.pl", "t/lib.pl") {
     do $file; if ($@) { print STDERR "Error while executing lib.pl: $@\n";
 			   exit 10;
 		      }
-    if ($driver ne '') {
+    if ($mdriver ne '') {
 	last;
     }
 }
@@ -56,21 +39,25 @@ sub ServerError() {
 #
 #   Main loop; leave this untouched, put tests into the loop
 #
+use vars qw($state);
 while (Testing()) {
     #
     #   Connect to the database
+    my $dbh;
     Test($state or $dbh = DBI->connect($test_dsn, $test_user, $test_password))
 	or ServerError();
 
     #
     #   Find a possible new table name
     #
+    my $table;
     Test($state or $table = FindNewTable($dbh))
 	   or DbiError($dbh->err, $dbh->errstr);
 
     #
     #   Create a new table
     #
+    my $def;
     Test($state or ($def = TableDefinition($table,
 					   ["id",   "INTEGER",  4, 0],
 					   ["name", "CHAR",    64, 0]),
@@ -81,5 +68,11 @@ while (Testing()) {
     #   ... and drop it.
     #
     Test($state or $dbh->do("DROP TABLE $table"))
+	   or DbiError($dbh->err, $dbh->errstr);
+
+    #
+    #   Finally disconnect.
+    #
+    Test($state or $dbh->disconnect())
 	   or DbiError($dbh->err, $dbh->errstr);
 }

@@ -17,7 +17,7 @@ my $host = shift @ARGV || "";
 
 BEGIN {
     do ((-f "lib.pl") ? "lib.pl" : "t/lib.pl");
-    if ($driver ne "mysql") { print "1..0\n"; exit 0; }
+    if ($mdriver ne "mysql") { print "1..0\n"; exit 0; }
     print "1..68\n";
 }
 

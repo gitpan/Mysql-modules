@@ -1,29 +1,16 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 50chopblanks.t,v 1.1810 1997/09/12 23:54:34 joe Exp $
+#   $Id: 50chopblanks.t,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
 #
 #   This driver should check whether 'ChopBlanks' works.
 #
 
 
 #
-#   List of drivers that may execute this test; if this list is
-#   empty, than any driver may execute the test.
-#
-#@DRIVERS_ALLOWED = ();
-
-
-#
-#   List of drivers that may not execute this test; this list is
-#   only used if @DRIVERS_ALLOWED is empty
-#
-#@DRIVERS_DENIED = ();
-
-
-#
 #   Make -w happy
 #
-use vars qw($test_dsn $test_user $test_password $driver $verbose $state);
+use vars qw($test_dsn $test_user $test_password $mdriver $verbose $state
+	    $dbdriver);
 use vars qw($COL_NULLABLE $COL_KEY);
 $test_dsn = '';
 $test_user = '';
@@ -35,21 +22,18 @@ $test_password = '';
 #
 use DBI;
 use strict;
-$driver = "";
+$mdriver = "";
 {
     my $file;
     foreach $file ("lib.pl", "t/lib.pl") {
 	do $file; if ($@) { print STDERR "Error while executing lib.pl: $@\n";
 			    exit 10;
 			}
-	if ($driver ne '') {
+	if ($mdriver ne '') {
 	    last;
 	}
     }
 }
-
-sub ErrMsg (@_) { if ($verbose) { print (@_); } }
-sub ErrMsgF (@_) { if ($verbose) { printf (@_); } }
 
 sub ServerError() {
     print STDERR ("Cannot connect: ", $DBI::errstr, "\n",
@@ -117,17 +101,18 @@ while (Testing()) {
 	# First try to retreive without chopping blanks.
 	$sth->{'ChopBlanks'} = 0;
 	Test($state or $sth->execute)
-	    or ErrMsgF("execute failed: query $query, error %s.\n",
+	    or ErrMsgF("execute failed: query %s, error %s.\n", $query,
 		       $sth->errstr);
 	Test($state or defined($ref = $sth->fetchrow_arrayref))
 	    or ErrMsgF("fetch failed: query $query, error %s.\n",
 		       $sth->errstr);
 	Test($state or ($$ref[1] eq $name)
 	            or ($name =~ /^$$ref[1]\s+$/  &&
-			($driver eq 'mysql'  ||  $driver eq 'pNET')))
+			($dbdriver eq 'mysql'  ||  $dbdriver eq 'ODBC')))
 	    or ErrMsgF("problems with ChopBlanks = 0:"
 		       . " expected '%s', got '%s'.\n",
 		       $name, $$ref[1]);
+	Test($state or $sth->finish());
 
 	# Now try to retreive with chopping blanks.
 	$sth->{'ChopBlanks'} = 1;
@@ -137,7 +122,7 @@ while (Testing()) {
 	my $n = $name;
 	$n =~ s/^\s+//;
 	$n =~ s/\s+$//;
-	Test($state or defined($ref = $sth->fetchrow_arrayref))
+	Test($state or ($ref = $sth->fetchrow_arrayref))
 	    or ErrMsgF("fetch failed: query $query, error %s.\n",
 		       $sth->errstr);
 	Test($state or ($$ref[1] eq $n))
