@@ -21,7 +21,7 @@
  *           Fax: +49 7123 / 14892
  *
  *
- *  $Id: dbdimp.c,v 1.1809 1997/09/12 18:34:09 joe Exp $
+ *  $Id: dbdimp.c,v 1.1810 1997/09/12 23:54:13 joe Exp $
  */
 
 
@@ -1029,7 +1029,11 @@ int dbd_st_STORE_attrib(SV* sth, imp_sth_t* imp_sth, SV* keysv, SV* valuesv) {
 #ifdef DBD_MYSQL
 #define IS_NUM(A) ((A) >= (int) FIELD_TYPE_DECIMAL && (A) <= FIELD_TYPE_DATETIME)
 #else
+#ifdef UINT_TYPE
 #define IS_NUM(A) ((A) == INT_TYPE || (A) == REAL_TYPE || (A) == UINT_TYPE)
+#else
+#define IS_NUM(A) ((A) == INT_TYPE || (A) == REAL_TYPE)
+#endif
 #endif
 #endif
 
@@ -1122,6 +1126,7 @@ SV* dbd_st_FETCH_internal(SV* sth, int what, result_t res, int cacheit) {
 			{ CHAR_TYPE, "char" },
 			{ REAL_TYPE, "real" },
 			{ IDENT_TYPE, "ident" },
+#ifdef IDX_TYPE
 			{ IDX_TYPE, "index" },
 			{ TEXT_TYPE, "text" },
 			{ DATE_TYPE, "date" },
@@ -1129,6 +1134,7 @@ SV* dbd_st_FETCH_internal(SV* sth, int what, result_t res, int cacheit) {
 			{ MONEY_TYPE, "money" },
 			{ TIME_TYPE, "time" },
 			{ SYSVAR_TYPE, "sys" }
+#endif
 #endif
 		    };
 		    int i, found = FALSE;
@@ -1174,7 +1180,7 @@ SV* dbd_st_FETCH_internal(SV* sth, int what, result_t res, int cacheit) {
     if (av == Nullav) {
 	return &sv_undef;
     }
-    return sv_2mortal(newRV_noinc((SV*)av));
+    return sv_2mortal(newRV((SV*)av));
 }
 
 
