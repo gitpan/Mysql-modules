@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 10dsnlist.t,v 1.1.1.1 1997/08/27 10:32:15 joe Exp $
+#   $Id: 10dsnlist.t,v 1.1804 1997/08/30 15:11:07 joe Exp $
 #
 #   This test creates a database and drops it. Should be executed
 #   after listdsn.
@@ -18,7 +18,7 @@
 #   List of drivers that may not execute this test; this list is
 #   only used if @DRIVERS_ALLOWED is empty
 #
-#@DRIVERS_DENIED = ();
+@DRIVERS_DENIED = @DRIVERS_DENIED = ('pNET');
 
 
 #

@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 50chopblanks.t,v 1.1.1.1 1997/08/27 10:32:15 joe Exp $
+#   $Id: 50chopblanks.t,v 1.1804 1997/08/30 15:11:09 joe Exp $
 #
 #   This driver should check whether 'ChopBlanks' works.
 #
@@ -119,11 +119,12 @@ while (Testing()) {
 	Test($state or $sth->execute)
 	    or ErrMsgF("execute failed: query $query, error %s.\n",
 		       $sth->errstr);
-	Test($state or defined($ref = $sth->fetch))
+	Test($state or defined($ref = $sth->fetchrow_arrayref))
 	    or ErrMsgF("fetch failed: query $query, error %s.\n",
 		       $sth->errstr);
 	Test($state or ($$ref[1] eq $name)
-	            or ($name =~ /^$$ref[1]\s+$/  &&  $driver eq 'mysql'))
+	            or ($name =~ /^$$ref[1]\s+$/  &&
+			($driver eq 'mysql'  ||  $driver eq 'pNET')))
 	    or ErrMsgF("problems with ChopBlanks = 0:"
 		       . " expected '%s', got '%s'.\n",
 		       $name, $$ref[1]);
@@ -136,13 +137,13 @@ while (Testing()) {
 	my $n = $name;
 	$n =~ s/^\s+//;
 	$n =~ s/\s+$//;
-	Test($state or defined($ref = $sth->fetch))
+	Test($state or defined($ref = $sth->fetchrow_arrayref))
 	    or ErrMsgF("fetch failed: query $query, error %s.\n",
 		       $sth->errstr);
 	Test($state or ($$ref[1] eq $n))
-	    or ErrMsgF("problems with ChopBlanks = 0:"
+	    or ErrMsgF("problems with ChopBlanks = 1:"
 		       . " expected '%s', got '%s'.\n",
-		       $n, $$ref[0]);
+		       $n, $$ref[1]);
 
 	Test($state or $sth->finish)
 	    or ErrMsgF("Cannot finish: %s.\n", $sth->errstr);

@@ -8,9 +8,9 @@ require Mysql::Statement;
 $QUIET  = $QUIET  = '';
 @ISA    = @ISA    = '';
 @EXPORT = @EXPORT = '';
-$VERSION = $VERSION = "1.1802";
+$VERSION = $VERSION = "1.1804";
 
-# $Revision: 1.2 $$Date: 1997/08/27 21:44:42 $$RCSfile: Mysql.pm,v $
+# $Revision: 1.1804 $$Date: 1997/08/30 15:10:32 $$RCSfile: Mysql.pm,v $
 
 $QUIET = 0;
 
@@ -42,8 +42,6 @@ sub sock     { return shift->{'SOCK'} }
 sub sockfd   { return shift->{'SOCKFD'} }
 sub database { return shift->{'DATABASE'} }
 
-sub IDX_TYPE() { 0; }
-
 sub quote	{
     my $self = shift;
     my $str = shift;
@@ -51,7 +49,9 @@ sub quote	{
     my $trunc = shift;
     substr($str,$trunc) = '' if defined $trunc and $trunc > 0 and length($str) > $trunc;
     $str =~ s/([\\\'])/\\$1/g;
-    $str =~ s/\0/\\0/g;
+    if ($self->isa('Mysql')) {
+	$str =~ s/\0/\\0/g;
+    }
     "'$str'";
 }
 
@@ -103,7 +103,7 @@ __END__
 
 =head1 NAME
 
-Msql - Perl interface to the mSQL database
+Msql / Mysql - Perl interfaces to the mSQL and mysql databases
 
 =head1 SYNOPSIS
 
@@ -112,6 +112,13 @@ Msql - Perl interface to the mSQL database
   $dbh = Msql->connect;
   $dbh = Msql->connect($host);
   $dbh = Msql->connect($host, $database);
+
+      or
+
+  use Mysql;
+
+  $dbh = Mysql->connect(undef, $database, $user, $password);
+  $dbh = Mysql->connect($host, $database, $user, $password);
 	
   $dbh->selectdb($database);
 	
@@ -120,11 +127,13 @@ Msql - Perl interface to the mSQL database
 	
   $quoted_string = $dbh->quote($unquoted_string);
   $error_message = $dbh->errmsg;
+  $error_number = $dbh->errno;   # MySQL only
 
   $sth = $dbh->listfields($table);
   $sth = $dbh->query($sql_statement);
 	
   @arr = $sth->fetchrow;
+  @arr = $sth->fetchcol($col_number);
   %hash = $sth->fetchhash;
 	
   $sth->dataseek($row_number);
@@ -138,23 +147,33 @@ Msql - Perl interface to the mSQL database
 =head1 DESCRIPTION
 
 This package is designed as close as possible to its C API
-counterpart. The manual that comes with mSQL describes most things you
-need. Due to popular demand it was decided though, that this interface
+counterpart. The manual that comes with mSQL or MySQL describes most things
+you need. Due to popular demand it was decided though, that this interface
 does not use StudlyCaps (see below).
 
+The version you have selected is an adaption still under development,
+please consult the file "Changes" in your distribution.
+
 Internally you are dealing with the two classes C<Msql> and
-C<Msql::Statement>. You will never see the latter, because you reach
+C<Msql::Statement> or C<Mysql> and C<Mysql::Statement>, respectively.
+You will never see the latter, because you reach
 it through a statement handle returned by a query or a listfields
-statement. The only class you name explicitly is Msql. It offers you
-the connect command:
+statement. The only class you name explicitly is Msql or Mysql. They
+offer you the connect command:
 
   $dbh = Msql->connect;
   $dbh = Msql->connect($host);
   $dbh = Msql->connect($host, $database);
 
+    or
+
+  $dbh = Msql->connect(undef, undef, $user, $password);
+  $dbh = Msql->connect($host, undef, $user, $password);
+  $dbh = Msql->connect($host, $database, $user, $password);
+
 This connects you with the desired host/database. With no argument or
 with an empty string as the first argument it connects to the UNIX
-socket (usually /dev/msql), which has a much better performance than
+socket, which has a much better performance than
 the TCP counterpart. A database name as the second argument selects
 the chosen database within the connection. The return value is a
 database handle if the connect succeeds, otherwise the return value is
@@ -172,7 +191,7 @@ selectdb.
   $sth = $dbh->listfields($table);
   $sth = $dbh->query($sql_statement);
 
-These two work rather similar as descibed in the mSQL manual. They
+These two work rather similar as descibed in the mSQL or MySQL manual. They
 return a statement handle which lets you further explore what the
 server has to tell you. On error the return value is undef. The object
 returned by listfields will not know about the size of the table, so a
@@ -196,6 +215,13 @@ the table, the values are the table values. Be aware, that when you
 have a table with two identical column names, you will not be able to
 use this method without trashing one column. In such a case, you
 should use the fetchrow method.
+
+  @arr = $sth->fetchcol($colnum);
+
+returns an array of the values of each row for column $colnum.  Note that
+this reads the entire table and leaves the row offset at the end of the
+table; be sure to use $sth->dataseek() to reset it if you want to
+re-examine the table.
 
   $sth->dataseek($row_number);
 
@@ -224,15 +250,28 @@ close the connection, choose to do one of the following:
 
 =head2 Error messages
 
-A static method in the Msql class is -E<gt>errmsg(), which returns the
-current value of the msqlErrMsg variable that is provided by the C
-API. There's also a global variable $Msql::db_errstr, which always
-holds the last error message. The former is reset with the next
-executed command, the latter not.
+Both drivers, Msql and Mysql implement a method -E<gt>errmsg(), which
+returns a textual error message. Mysql additionally supports a method
+-E<gt>errno returning the corresponding error number. Note that Msql's
+I<errmsg> is a static method, thus it is legal to fetch
+
+    Msql->errmsg();
+
+Mysql doesn't support this, fetching the error message is only valid
+via
+
+    $dbh->errmsg();
+
+I recommend, that even Msql users restrict themselves to the latter
+for portability reasons. There are also global variables $Msql::db_errstr
+and $Mysql::db_errstr, which always hold the last error message. The former
+is reset with the next executed command, the latter not. Usually
+there's no need for accessing the global variables, with one exception:
+If the I<connect> method fails, you need them.
 
 =head2 The C<-w> switch
 
-With Msql the C<-w> switch is your friend! If you call your perl
+With Msql and Mysql the C<-w> switch is your friend! If you call your perl
 program with the C<-w> switch you get the warnings from -E<gt>errmsg on
 STDERR. This is a handy method to get the error messages from the msql
 server without coding it into your program.
@@ -242,17 +281,21 @@ environment variables that are described in David's manual. David's
 debugging aid is excellent, there's nothing to be added.
 
 If you want to use the C<-w> switch but do not want to see the error
-messages from the msql daemon, you can set the variable $Msql::QUIET
-to some true value, and they will be supressed.
+messages from the msql daemon, you can set the variables $Msql::QUIET
+or $Mysql::QUIET to some true value, and they will be supressed.
 
 =head2 -E<gt>quote($str [, $length])
 
 returns the argument enclosed in single ticks ('') with any special
-character escaped according to the needs of the API. Currently this
-means, any single tick within the string is escaped with a backslash
-and backslashes are doubled. Currently (as of msql-1.0.16) the API
-does not allow to insert binary nulls into tables. The quote method
-does not fix this deficiency.
+character escaped according to the needs of the API.
+
+For mSQL this means, any single tick within the string is escaped with
+a backslash and backslashes are doubled. Currently (as of msql-1.0.16)
+the API does not allow to insert NUL's (ASCII 0) into tables. The quote
+method does not fix this deficiency.
+
+MySQL allows NUL's or any other kind of binary data in strings. Thus
+the quote method will additionally escape NUL's as \0.
 
 If you pass undefined values to the quote method, it returns the
 string C<NULL>.
@@ -274,6 +317,10 @@ As said above you get a database handle with
 
   $dbh = Msql->connect($host, $database);
 
+    or
+
+  $dbh = Mysql->connect($host, $database);
+
 The database handle knows about the socket, the host, and the database
 it is connected to.
 
@@ -283,8 +330,13 @@ You get at the three values with the methods
   $scalar = $dbh->host;
   $scalar = $dbh->database;
 
-database returns undef, if you have connected without or with only one
-argument.
+Mysql additionally supports
+
+  $scalar = $dbh->user;
+  $scalar = $dbh->sockdf;
+
+where the latter is the file descriptor of the socket used by the
+database  connection. This is the same as $dbh->sock for mSQL.
 
 =head2 Statement Handle
 
@@ -302,15 +354,26 @@ $sth knows about all metadata that are provided by the API:
   @arr  = $sth->name;        the names of the columns
   @arr  = $sth->type;        the type of each column, defined in msql.h
 	                     and accessible via Msql::CHAR_TYPE,
-	                     &Msql::INT_TYPE, &Msql::REAL_TYPE,
-  @arr  = $sth->isnotnull;   array of boolean
-  @arr  = $sth->isprikey;    array of boolean
+	                     &Msql::INT_TYPE, &Msql::REAL_TYPE or
+                             &Mysql::FIELD_TYPE_STRING,
+                             &Mysql::FIELD_TYPE_LONG, ...
+  @arr  = $sth->is_not_null; array of boolean
+  @arr  = $sth->is_pri_key;  array of boolean
   @arr  = $sth->length;      array of the length of each field in bytes
 
-The six last methods return an array in array context and an array
-reference (see L<perlref> and L<perlldsc> for details) when called in
-a scalar context. The scalar context is useful, if you need only the
-name of one column, e.g.
+Mysql additionally supports
+
+  $scalar  = $sth->affected_rows number of rows in database affected by query
+  $scalar  = $sth->insert_id     the unique id given to a auto_increment field.
+  $string  = $sth->info()        more info from some queries (ALTER TABLE...)
+  $arrref  = $sth->is_num;       array of boolean
+  $arrref  = $sth->is_blob;      array of boolean
+
+The array methods (table, name, type, is_not_null, is_pri_key, length,
+affected_rows, is_num and blob) return an array in array context and
+an array reference (see L<perlref> and L<perlldsc> for details) when
+called in a scalar context. The scalar context is useful, if you need
+only the name of one column, e.g.
 
     $name_of_third_column = $sth->name->[2]
 
@@ -359,21 +422,6 @@ REAL_TYPE are in @EXPORT instead of @EXPORT_OK. This means, that you
 always have them imported into your namespace. I consider it a bug,
 but not such a serious one, that I intend to break old programs by
 moving them into EXPORT_OK.
-
-=head2 Connecting to different port(s) [only for mSQL-1.*.*]
-
-The mSQL API allows you to interface to a different port than the
-default that is compiled into your copy. To use this feature you have
-to set the environment variable MSQL_TCP_PORT. You can do so at any
-time in your program with the command
-
-    $ENV{'MSQL_TCP_PORT'} = 1234; # or 1112 or 1113 or 4333 or 4334
-
-Any subsequent connect() will establish a connection to the specified
-port.
-
-For connect()s to the UNIX socket of the local machine use
-MSQL_UNIX_PORT instead.
 
 =head2 Displaying whole tables in one go
 
@@ -441,8 +489,8 @@ Output of pmsql:
 
 =head2 Version information
 
-The version of MsqlPerl is always stored in $Msql::VERSION as it is
-perl standard.
+The version of Msql and Mysql is always stored in $Msql::VERSION or
+$Mysql::VERSION as it is perl standard.
 
 The mSQL API implements methods to access some internal configuration
 parameters: gethostinfo, getserverinfo, and getprotoinfo.  All three
@@ -452,14 +500,17 @@ three return global variables that reflect the B<last> connect()
 command within the current program. This means, that all three return
 empty strings or zero I<before> the first call to connect().
 
+This situation is better with MySQL: The methods are valid only
+in connection with a datanase handle.
+
 =head2 Administration
 
 shutdown, createdb, dropdb, reloadacls are all accessible via a
 database handle and implement the corresponding methods to what
 msqladmin does.
 
-The mSQL engine does not permit that these commands are invoked by
-other users than the administrator of the database. So please make sure
+The mSQL and MySQL engines do not permit that these commands are invoked by
+users without sufficient privileges. So please make sure
 to check the return and error code when you issue one of them.
 
 =head2 StudlyCaps
@@ -483,6 +534,10 @@ work.
 mSQL is a database server and an API library written by David
 Hughes. To use the adaptor you definitely have to install these first.
 
+MySQL is a libmysqlclient.a library written by Michael Widenius
+This was originally inspired by MySQL.
+
+
 =head1 AUTHOR
 
 andreas koenig C<koenig@franz.ww.TU-Berlin.DE>
@@ -498,4 +553,3 @@ with better support and more functionality. Alligator maintains an
 interesting page on the DBI development: http://www.hermetica.com/
 
 =cut
-

@@ -1,6 +1,6 @@
 #   Hej, Emacs, give us -*- perl mode here!
 #
-#   $Id: lib.pl,v 1.1.1.1 1997/08/27 10:32:15 joe Exp $
+#   $Id: lib.pl,v 1.1804 1997/08/30 15:11:09 joe Exp $
 #
 #   lib.pl is the file where database specific things should live,
 #   whereever possible. For example, you define certain constants
@@ -221,6 +221,10 @@ sub TableDefinition ($@) {
 			}
 		    }
 		}
+		if ($off) {
+		    print "1..0\n";
+		    exit 0;
+		}
 		++$count;
 		$::state = 0;
 		print "1..$::numTests\n";
@@ -264,15 +268,19 @@ sub TableDefinition ($@) {
 #
 #   Read a single test result
 #
-    sub Test ($) {
+    sub Test ($;$$) {
+	my($result, $error, $diag) = @_;
 	++$::numTests;
-	my($result) = @_;
 	if ($count == 2) {
+	    if ($::verbose && defined($diag)) {
+	        printf("$diag%s", (($diag =~ /\n$/) ? "" : "\n"));
+	    }
 	    if ($::state || $result) {
 		print "ok $::numTests\n";
 		return 1;
 	    } else {
-		print "not ok $::numTests\n";
+		printf("not ok $::numTests%s\n",
+			(defined($error) ? " $error" : ""));
 		return 0;
 	    }
 	}

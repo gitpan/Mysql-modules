@@ -101,6 +101,12 @@ double mymsql_constant(char* name, char* arg) {
 		    return FIELD_TYPE_STRING;
 		break;
 	    case 'T':
+		if (strEQ(n, "TINY"))
+#ifdef FIELD_TYPE_TINY
+		    return FIELD_TYPE_TINY;
+#else
+		    return 1;
+#endif
 		if (strEQ(n, "TINY_BLOB"))
 		    return FIELD_TYPE_TINY_BLOB;
 		if (strEQ(n, "TIMESTAMP"))

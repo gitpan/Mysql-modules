@@ -2,6 +2,10 @@ The code in this package is
 
 Copyright (c) 1994-1997 Andreas König <a.koenig@mind.de>
 
+parts, namely the DBD::mSQL and DBD::mysql modules are
+
+Copyright (c) 1997 Jochen Wiedmann <wiedmann@neckar-alb.de>
+
 and may be used, copied and redistributed under the same terms as perl
 (see the files README, Copying and Artistic in the perl distribution).
 
@@ -26,6 +30,7 @@ from
 
 Please follow the links there.
 
+
     ###########################################################
     ###########################################################
     ##  						     ##
@@ -35,8 +40,16 @@ Please follow the links there.
     ###########################################################
     ###########################################################
 
-To use the perl modules you definitely have to install the database
-and the library first. From the perl side perl5.003 is required.
+MySQL is another database server and another API library written by
+Michael 'Monty' Widenius. It was inspired by mSQL, but is not based
+on it. You find it on
+
+    http://www.tcx.se
+
+binary versions as well as source versions.
+
+To use the perl modules you definitely have to install the respective
+database and the library first. From the perl side perl5.003 is required.
 
 Installation
 ------------
@@ -46,39 +59,48 @@ See the INSTALL document.
 What is in this package
 -----------------------
 
-Msql.pm and DBD::mSQL implement two different approaches to
-communicate with an mSQL server. DBD::mSQL is built upon the DBI, the
-generic Perl Database Interface. It brings you an identical interface
-to a broad variety of databases and is in this regard comparable to
-ODBC. The advantage of the DBI approach is portability and
-interoperability. Msql.pm is the elder species. It was written before
-DBI was available but it was inspired by an early draft of the DBI
-specification. As it has been circulating longer it is more mature and
-pretty stable. It's also more complete than DBD::mSQL.
+M(y)sql.pm and DBD::mSQL(mysql) implement two different approaches to
+communicate with an mSQL or mysql server. DBD::mSQL(mysql) is built
+upon the DBI, the generic Perl Database Interface. It brings you an
+identical interface to a broad variety of databases and is in this
+regard comparable to ODBC. The advantage of the DBI approach is
+portability and interoperability. M(y)sql.pm are the elder species.
+They were written before DBI was available but inspired by an early
+draft of the DBI specification. As they have been circulating longer
+they are more mature and pretty stable. They're also more complete
+than DBD::mSQL and DBD::mysql.
 
-Some day in the future DBD::mSQL will probably be the clearly superior
-competitor in this package. Today you have to decide on your own about
-the trade-offs.
+Some day in the future DBD::mSQL and DBD::mysql will probably be the
+clearly superior competitor in this package. Today you have to decide
+on your own about the trade-offs.
 
-What you achieve with Msql.pm
------------------------------
+What you achieve with Msql.pm and Mysql.pm
+------------------------------------------
 
-Msql.pm is an interface between the perl programming language and the
-mSQL programming API that comes with the mSQL relational database
-management system. All functions provided by the mSQL programming API
-are supported.
+Msql.pm and Mysql.pm are an interface between the perl programming
+language and the mSQL or mysql programming API that come with the
+mSQL any mysql relational database management systems. All functions
+provided by the respective programming API's are supported.
 
 From perl you activate the interface with the statement
 
     use Msql;
 
-After that you can connect to multiple msql database servers and send
-multiple queries to any of them via an simple object oriented
+	or
+
+    use Mysql;
+
+After that you can connect to multiple msql or mysql database servers
+and send multiple queries to any of them via a simple object oriented
 interface. Two types of objects are available: database handles and
 statement handles. Perl returns a database handle to the Connect
 method like so:
 
     $dbh = Msql->connect($hostname,$databasename);
+
+	or
+
+    $dbh = Mysql->connect($hostname,$databasename);
 
 Once you have connected to a database, you get a statement handle
 with:
@@ -97,9 +119,9 @@ returned from the database with the FetchRow method:
 or
     %hash = $sth->fetchhash;
 
-You can access all metadata that mSQL supplies for a given table. To
-find out the number of rows or the number of fields returned by a
-query you simply say:
+You can access all metadata that mSQL and mysql supplie for a given
+table. To find out the number of rows or the number of fields returned
+by a query you simply say:
 
     $numrows = $sth->numrows;
     $numfields = $sth->numfields;
@@ -113,10 +135,10 @@ The list of the names for each column is returned by
 
     @list => $sth->name;
 
-As for other metadata available, consult the manpage that comes with
-MsqlPerl and study the examples in the file t/msql.t, which is the
-extensive testscript to test your installation, but is heavily
-commented, so you may use it as a tutorial.
+As for other metadata available, consult the manpages that come with
+MsqlPerl and Mysqlperl and study the examples in the file t/akmisc.t,
+which is the extensive testscript to test your installation, but is
+heavily commented, so you may use it as a tutorial.
 
 Installing The Adaptor
 ----------------------
@@ -127,9 +149,9 @@ Unpack in any directory anywhere on your filesystem and run
     make
     make test
 
-The latter will give you some instructions if msqld is not running or
-if a database "test" is not available. Rest assured, that no existing
-data in this database will be overwritten.
+The latter will give you some instructions if msqld or mysqld are not
+running or if a database "test" is not available. Rest assured, that
+no existing data in this database will be overwritten.
 
 If the tests finish with `ok', give it a try to
 
@@ -143,29 +165,30 @@ some more information from the DynaLoader.
 Documentation
 -------------
 
-Documentation is available in pod format within the file
-Msql.pm. During installation this should be turned into a manpage. Try
-'man Msql', and if this doesn't work on your system, try 'perldoc
-Msql'.
+Documentation is available in pod format within the files Msql.pm and
+Mysql.pm. During installation this should be turned into a manpage. Try
+'man Msql' or 'man Mysql', and if this doesn't work on your system, try
+'perldoc Msql' or 'perldoc Mysql'.
 
-The tutorial that may be helpful for you is in the file t/msql.t. This
-file is the test program for this package and illustrates all basic
+The tutorial that may be helpful for you is in the file t/akmisc.t.
+This file is the test program for this package and illustrates all basic
 operations that are available.
 
-pmsql
------
+pmsql and pmysql
+----------------
 
-This package comes with a small standalone program, pmsql. It is a
-lightweight shell for your interactive communication needs with your
-mSQL server(s). Try 'man pmsql' or 'perldoc pmsql' after installation
-to get at the documention embedded in the program.
+This package comes with a small standalone program, pmsql or pmysql.
+It is a lightweight shell for your interactive communication needs
+with your mSQL or mysql server(s). Try 'man pmsql' or 'man pmysql'
+to get at the documentation embedded in the program. If that doesn't
+work, try 'perldoc pmsql' or 'perldoc pmysql'.
 
-pmsql is similar to both the msql monitor and the relshow program. The
-main advantage over those is that if you have Term::ReadKey and
-Term::ReadLine::Perl installed on your system, you have access to a
-readline clone, entirely written in perl with command line editor, a
-basic completion and history, and you get the output of any select
-query piped into your favorite pager program.
+pmsql are similar to both the msql (mysql) monitor and the relshow
+(mysqlshow) program. The main advantage over those is that if you
+have Term::ReadKey and Term::ReadLine::Perl installed on your system,
+you have access to a readline clone, entirely written in perl with
+command line editor, a basic completion and history, and you get the
+output of any select query piped into your favorite pager program.
 
 Mailing list
 ------------
@@ -201,5 +224,4 @@ mailing list.
 
 
 andreas könig <koenig@kulturbox.de>
-
 

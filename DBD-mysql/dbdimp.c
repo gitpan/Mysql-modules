@@ -21,7 +21,7 @@
  *           Fax: +49 7123 / 14892
  *
  *
- *  $Id: dbdimp.c,v 1.1.1.1 1997/08/27 10:32:15 joe Exp $
+ *  $Id: dbdimp.c,v 1.1804 1997/08/30 15:09:42 joe Exp $
  */
 
 
@@ -31,6 +31,14 @@ DBISTATE_DECLARE;
 
 static SV* dbd_errnum = NULL;
 static SV* dbd_errstr = NULL;
+
+
+#if defined(DBD_MYSQL)  &&  defined(mysql_errno)
+#define DO_ERROR(h, c, s) do_error(h, (int) mysql_errno(s), mysql_error(s))
+#else
+#define DO_ERROR(h, c, s) do_error(h, c, MyError(s))
+#endif
+
 
 
 /***************************************************************************
@@ -107,7 +115,7 @@ int dbd_db_login(SV* dbh, char* dbname, char* user, char* password) {
     char* host = NULL;
 
     if (dbis->debug >= 2)
-        printf("imp_dbh->connect: db = %s, uid = %s, pwd = %s\n",
+        fprintf(DBILOGFP, "imp_dbh->connect: db = %s, uid = %s, pwd = %s\n",
 	       dbname ? dbname : "NULL",
 	       user ? user : "NULL",
 	       password ? password : "NULL");
@@ -132,7 +140,7 @@ int dbd_db_login(SV* dbh, char* dbname, char* user, char* password) {
 #else
     if (!dbd_db_connect(&imp_dbh->svsock, host, user, password)) {
 #endif
-        do_error(dbh, JW_ERR_CONNECT, MyError(imp_dbh->svsock));
+	DO_ERROR(dbh, JW_ERR_CONNECT, imp_dbh->svsock);
 	Safefree(copy);
 	return FALSE;
     }
@@ -142,7 +150,7 @@ int dbd_db_login(SV* dbh, char* dbname, char* user, char* password) {
      */
     if (MySelectDb(imp_dbh->svsock, dbname)) {
         Safefree(copy);
-        do_error(dbh, JW_ERR_SELECT_DB, MyError(imp_dbh->svsock));
+	DO_ERROR(dbh, JW_ERR_SELECT_DB, imp_dbh->svsock);
 	MyClose(imp_dbh->svsock);
 	return FALSE;
     }
@@ -210,7 +218,7 @@ int dbd_db_disconnect(SV* dbh) {
     /* since most errors imply already disconnected.    */
     DBIc_off(imp_dbh, DBIcf_ACTIVE);
     if (dbis->debug >= 2)
-        printf("imp_dbh->svsock: %lx\n", (long) &imp_dbh->svsock);
+        fprintf(DBILOGFP, "imp_dbh->svsock: %lx\n", (long) &imp_dbh->svsock);
     MyClose(imp_dbh->svsock );
 
     /* We don't free imp_dbh since a reference still exists    */
@@ -308,6 +316,7 @@ int dbd_db_STORE_attrib(SV* dbh, SV* keysv, SV* valuesv) {
 SV* dbd_db_FETCH_attrib(SV* dbh, SV* keysv) {
     STRLEN kl;
     char *key = SvPV(keysv, kl);
+    D_imp_dbh(dbh);
 
     if (kl==10 && strEQ(key, "AutoCommit")){
         /*
@@ -316,7 +325,16 @@ SV* dbd_db_FETCH_attrib(SV* dbh, SV* keysv) {
 	 */
         return &sv_yes;
     }
-
+    if (kl == 5  &&  strEQ(key, "errno")) {
+#if defined(DBD_MYSQL)  &&  defined(mysql_errno)
+	return sv_2mortal(newSViv(mysql_errno(imp_dbh->svsock)));
+#else
+	return sv_2mortal(newSViv(-1));
+#endif
+    } else if (kl == 6  &&  strEQ(key, "errmsg")) {
+	char* msg = MyError(imp_dbh->svsock);
+	return sv_2mortal(newSVpv(msg, strlen(msg)));
+    }
     return Nullsv;
 }
 
@@ -474,8 +492,9 @@ static int CommandHasResult(char* statement) {
     for (cptr = commands;  cptr->code;  ++cptr) {
         if (!x_strnicmp(cptr->command, statement, strlen(cptr->command))) {
 	    if (dbis->debug >= 2) {
-	        printf ("Statement command is %s, %s\n", cptr->command,
-			cptr->code >= 0 ? "returns result" : "no result");
+	        fprintf (DBILOGFP, "Statement command is %s, %s\n",
+			 cptr->command,
+			 cptr->code >= 0 ? "returns result" : "no result");
 	    }
 	    return cptr->code;
 	}
@@ -485,7 +504,7 @@ static int CommandHasResult(char* statement) {
      *  Dunno, assume result is present.
      */
     if (dbis->debug >= 2) {
-        printf("Statement command is unknown, assuming result\n");
+        fprintf(DBILOGFP, "Statement command is unknown, assuming result\n");
     }
     return cptr->code;
 }
@@ -732,7 +751,7 @@ int dbd_st_execute(SV* sth) {
 
     if (MyQuery(imp_dbh->svsock, sbuf, slen) == -1) {
         Safefree(salloc);
-        do_error(sth, JW_ERR_QUERY, MyError(imp_dbh->svsock));
+        DO_ERROR(sth, JW_ERR_QUERY, imp_dbh->svsock);
 	return -2;
     }
     Safefree(salloc);
@@ -751,8 +770,7 @@ int dbd_st_execute(SV* sth) {
     }
 
     if (!(imp_sth->cda = MyStoreResult(imp_dbh->svsock))) {
-        do_error(sth, JW_ERR_STORE_RESULT,
-		       MyError(imp_dbh->svsock));
+        DO_ERROR(sth, JW_ERR_QUERY, imp_dbh->svsock);
 	return -2;
     }
 
@@ -816,9 +834,10 @@ AV* dbd_st_fetch(SV* sth) {
     unsigned int* lengths;
 #endif
 
+    ChopBlanks = DBIc_is(imp_sth, DBIcf_ChopBlanks);
     if (dbis->debug >= 2) {
-        fprintf(DBILOGFP, "    -> dbd_st_fetch for %08lx\n",
-		(u_long) sth);
+        fprintf(DBILOGFP, "    -> dbd_st_fetch for %08lx, chopblanks %d\n",
+		(u_long) sth, ChopBlanks);
     }
 
     if (!imp_sth->cda) {
@@ -830,8 +849,7 @@ AV* dbd_st_fetch(SV* sth) {
 #ifdef DBD_MYSQL
         if (!mysql_eof(imp_sth->cda)) {
 	    D_imp_dbh_from_sth;
-	    do_error(sth, JW_ERR_FETCH_ROW,
-			   MyError(imp_dbh->svsock));
+	    DO_ERROR(sth, JW_ERR_FETCH_ROW, imp_dbh->svsock);
 	}
 #endif
 	return Nullav;
@@ -841,8 +859,6 @@ AV* dbd_st_fetch(SV* sth) {
 #endif
     av = DBIS->get_fbav(imp_sth);
     num_fields = AvFILL(av)+1;
-
-    ChopBlanks = DBIc_is(imp_sth, DBIcf_ChopBlanks);
 
     for(i=0; i < num_fields; ++i) {
         char* col = cols[i];
@@ -957,7 +973,37 @@ void dbd_st_destroy(SV* sth) {
  **************************************************************************/
 
 int dbd_st_STORE_attrib(SV* sth, SV* keysv, SV* valuesv) {
-    return FALSE;
+    D_imp_sth(sth);
+    STRLEN(kl);
+    char* key = SvPV(keysv, kl);
+    int result = FALSE;
+
+    if (dbis->debug >= 2) {
+        fprintf(DBILOGFP,
+		"    -> dbd_st_STORE_attrib for %08lx, key %s\n",
+		(u_long) sth, key);
+    }
+
+    switch (*key) {
+      case 'C':
+	if (strEQ(key, "ChopBlanks")) {
+	    if (valuesv && SvTRUE(valuesv)) {
+		DBIc_on(imp_sth, DBIcf_ChopBlanks);
+	    } else {
+		DBIc_off(imp_sth, DBIcf_ChopBlanks);
+	    }
+	    result = TRUE;
+	}
+	break;
+    }
+
+    if (dbis->debug >= 2) {
+        fprintf(DBILOGFP,
+		"    <- dbd_st_STORE_attrib for %08lx, result %d\n",
+		(u_long) sth, result);
+    }
+
+    return result;
 }
 
 
@@ -985,7 +1031,19 @@ SV* dbd_st_FETCH_attrib(SV* sth, SV* keysv) {
     SV* retsv = Nullsv;
     int cacheit = TRUE;
 
+    if (dbis->debug >= 2) {
+        fprintf(DBILOGFP,
+		"    -> dbd_st_FETCH_attrib for %08lx, key %s\n",
+		(u_long) sth, key);
+    }
+
     switch (*key) {
+      case 'C':
+	if (strEQ(key, "ChopBlanks")) {
+	    retsv = DBIc_is(imp_sth, DBIcf_ChopBlanks) ? &sv_yes : &sv_no;
+	    cacheit = FALSE;
+	}
+	break;
       case 'N':
 	if (strEQ(key, "NAME")) {
 	    AV *av;
@@ -1025,6 +1083,12 @@ SV* dbd_st_FETCH_attrib(SV* sth, SV* keysv) {
 	    retsv = sv_2mortal(newSViv(imp_sth->insertid));
 	}
 	break;
+    }
+
+    if (dbis->debug >= 2) {
+        fprintf(DBILOGFP,
+		"    <- dbd_st_FETCH_attrib for %08lx, key %s: result %s\n",
+		(u_long) sth, key, SvPV(retsv, na));
     }
 
     if (cacheit) { /* cache for next time (via DBI quick_FETCH)	*/

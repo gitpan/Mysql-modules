@@ -8,14 +8,16 @@ use Config;
 $Verbose++ if $ENV{USER} eq "k";
 
 WriteMakefile(
-	      NAME       => "Mysql",
-	      "DISTNAME" => "Mysql-modules",
-	      "dist"     => { SUFFIX   => ".gz", DIST_DEFAULT => 'all tardist',
-			      COMPRESS => "gzip -9f" },
-	      VERSION_FROM => "lib/Mysql.pm",
-	      EXE_FILES => [qw(pmysql)],
-	      PREREQ_PM => { 'DBI' => 0.88 },
-	      CONFIGURE  => \&Mysql::Config::initialize,
+	      'NAME'         => "Mysql",
+	      'DISTNAME'     => "Mysql-modules",
+	      'dist'         => { 'SUFFIX'       => ".gz",
+				  'DIST_DEFAULT' => 'all tardist',
+				  'COMPRESS'     => "gzip -9f" },
+	      'VERSION_FROM' => "lib/Mysql.pm",
+	      'EXE_FILES'    => [qw(pmysql)],
+	      'PREREQ_PM'    => { 'DBI' => 0.88 },
+	      'CONFIGURE'    => \&Mysql::Config::initialize,
+	      'clean'        => { 'FILES' => "*.bak */*.bak */*/*.bak pmysql" }
 );
 
 package MY;	# so that "SUPER" works right
@@ -33,9 +35,10 @@ use Config;
 use vars qw(%X);
 %X = ();
 
-sub Modify ($$) {
-    my($source, $dest) = @_;
+sub Modify ($$$) {
+    my($source, $dest, $mref) = @_;
 
+    $Mysql::Config::EndSeen = 0;
     if (!open(INFILE, "<$source")) {
 	print STDERR "Cannot read $source: $!\n";
 	exit 10;
@@ -45,7 +48,7 @@ sub Modify ($$) {
 	exit 10;
     }
     while (defined($line = <INFILE>)) {
-	$line =~ s/DBD\:\:mSQL/DBD\:\:mysql/g;
+	$line = &$mref($line);
 	if (!(print OUTFILE $line)) {
 	    print STDERR "Cannot write $dest.new: $!\n";
 	}
@@ -64,6 +67,7 @@ sub Modify ($$) {
 	print STDERR "Cannot rename $dest.new to $dest: $!\n";
 	exit 10;
     }
+    unlink "$dest.bak";
 }
 
 
@@ -80,8 +84,30 @@ sub initialize {
 	  };
     unshift @mysqldir, $ENV{MYSQL_HOME} if exists $ENV{MYSQL_HOME};
 
-    Modify("DBD-mysql/mysql.xs", "DBD-mysql/mysql.xs");
-    Modify("lib/DBD/mysql.pm", "lib/DBD/mysql.pm");
+    my $mref = sub {
+	$line = shift;
+	if ($line =~ /__END__/) {
+	    $Mysql::Config::EndSeen = 1;
+	} elsif (!$Mysql::Config::EndSeen) {
+	    $line =~ s/DBD\:\:mSQL/DBD\:\:mysql/g;
+	    $line =~ s/DBI\:mSQL/DBI\:mysql/g;
+	    if ($line =~ /DBI\:\:_new_drh/) {
+		$line =~ s/mSQL/mysql/g;
+	    }
+	}
+	$line;
+    };
+    my $mref2 = sub {
+	$line = shift;
+	if ($line =~ /^\s*(use|require|bootstrap|package)\s+.*\;\s+$/) {
+	    $line =~ s/Msql/Mysql/g;
+	}
+	$line;
+    };
+    Modify("DBD-mysql/mysql.xs", "DBD-mysql/mysql.xs", $mref);
+    Modify("lib/DBD/mysql.pm", "lib/DBD/mysql.pm", $mref);
+    Modify("lib/Mysql.pm", "lib/Mysql.pm", $mref2);
+    Modify("lib/Mysql/Statement.pm", "lib/Mysql/Statement.pm", $mref2);
 
     my($mysqldir,$gooddir);
 

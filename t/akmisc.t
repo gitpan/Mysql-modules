@@ -108,7 +108,8 @@ sub drop {shift->query("drop table $_[0]"); }
 while (Testing()) {
     # You may connect in two steps: (1) Connect and (2) SelectDB...
 
-    Test($state or ($dbh = $class->connect($host)))
+    Test($state or ($dbh = $class->connect($host)), undef,
+	 "First connect to server")
 	or ServerError();
 
     Test($state or $dbh->selectdb("test"))
@@ -119,7 +120,8 @@ while (Testing()) {
     # Or you may call connect with two arguments, the first being the
     # host, and the second being the DB
 
-    Test($state or ($dbh = $class->connect($host,"test")))
+    Test($state or ($dbh = $class->connect($host,"test")), undef,
+	 "Trying two argument connect")
 	or !$verbose or print("Error while connecting: $$errstrRef.\n");
 
     Test($state or defined($dbh->listtables))
@@ -149,7 +151,7 @@ while (Testing()) {
 				     ["who", "CHAR",  32, $COL_NULLABLE])))
 	or !$verbose or print("Cannot get table definition.\n");
 
-    Test($state or $dbh->query($query))
+    Test($state or $dbh->query($query), undef, "Creating first test table")
 	or (print "Cannot create first table: $$errstrRef.\n", exit);
 
     Test($state or ($query = TableDefinition($secondtable,
@@ -175,7 +177,8 @@ while (Testing()) {
     }
 
     $query = "select * from $firsttable";
-    Test($state or ($sth = $dbh->query($query))) or test_error($dbh,0,$query);
+    Test($state or ($sth = $dbh->query($query)), undef, "First SELECT")
+	or test_error($dbh,0,$query);
     Test($state or ($sth->numrows == 3))
 	or !$verbose or printf("Wrong number of rows, expected %d, got %d.\n",
 			      3, $sth->numrows);
@@ -186,14 +189,16 @@ while (Testing()) {
 
     # There is the array reference $sth->name. It has to have as many
     # fields as $sth->numfields tells us
-    Test($state or (@{$sth->name} == $sth->numfields))
+    Test($state or (@{$sth->name} == $sth->numfields), undef,
+	 'Checking $sth->name')
 	or !$verbose or printf("Wrong number of names, expected %d, got %d.\n",
 			       $sth->numfields, @{$sth->name});
 
     # There is the array reference $sth->table. We expect, that all three
     # fields in the array have the same value, as we only selected from
     # $firsttable
-    Test($state or ($sth->table->[0] eq $firsttable))
+    Test($state or ($sth->table->[0] eq $firsttable), undef,
+	 'Checking $sth->table')
 	or !$verbose or printf("Wrong table name, expected %s, got %s.\n",
 			       $firsttable, $sth->table->[0]);
     Test($state or ($sth->table->[1] eq $firsttable))
@@ -209,7 +214,8 @@ while (Testing()) {
     # handled in perl5 up to 5.001m (will probably change soon)
     my $expected = ($driver eq 'mysql') ?
 	Mysql::FIELD_TYPE_STRING() : Msql::CHAR_TYPE();
-    Test($state or ($sth->type->[0] eq $expected))
+    Test($state or ($sth->type->[0] eq $expected), undef,
+	 'Checking $sth->type')
 	or !$verbose or printf("Wrong result type, expected %d, got %d.\n",
 			       $expected, $sth->type->[0]);
     
@@ -243,7 +249,8 @@ while (Testing()) {
 	or test_error($dbh);
 
     # We set the second field "not null". Does the API know that?
-    Test($state or ($sth->is_not_null->[1] > 0))
+    Test($state or ($sth->is_not_null->[1] > 0), undef,
+	 'Checking $sth->is_not_null')
 	or !$verbose or printf("NOT NULL not recognized (%s).\n",
 			       join(" ", @{$sth->is_not_null}));
     
@@ -261,7 +268,8 @@ while (Testing()) {
 	# variables too, that you won't need outside the block
 	my($sth1,$sth2,@row1,$count);
 	
-	Test($state or ($sth1 = $dbh->query("select * from $firsttable")))
+	Test($state or ($sth1 = $dbh->query("select * from $firsttable")),
+	     undef, 'Checking second sth')
 	    or !$verbose or print("Query had some problem:"
 				  . " $$errstrRef\n");
 	Test($state or ($sth2 = $dbh->query("select * from $secondtable")))
@@ -316,7 +324,8 @@ while (Testing()) {
 	}
 
 	# $mysql::db_errstr should contain the word "error" now
-	Test($state or ($dbh->errmsg =~ /error/))
+	Test($state or ($dbh->errmsg =~ /error/), undef,
+	     'Forcing error message')
 	    or !$verbose or printf("Expected error message.\n");
     }
 
@@ -368,7 +377,8 @@ while (Testing()) {
     # economically -- they cost you a slot in the server connection table,
     # and you can easily run out of available slots -- we, in the test
     # script want to know what happens with more than one handle
-    Test($state or ($dbh2 = $class->connect($host,"test")))
+    Test($state or ($dbh2 = $class->connect($host,"test")), undef,
+	 'Reconnect')
 	or !$verbose or print("Error while reconnecting: $$errstrRef.\n");
     
     # Some quick checks about the contents of the handle...
@@ -386,7 +396,8 @@ while (Testing()) {
 
     # Is $dbh2 able to drop a table, while we are connected with $dbh?
     # Sure it can...
-    Test($state or $dbh2->query("drop table $secondtable"))
+    Test($state or $dbh2->query("drop table $secondtable"), undef,
+	 'Second dbh')
 	or !$verbose or print("Error while dropping table with second handle:"
 			      . " $$errstrRef.\n");
     
@@ -397,7 +408,7 @@ while (Testing()) {
 	    @array = $dbh2->listdbs;
 	}
 	
-	Test($state or (grep( /^test$/, @array )))
+	Test($state or (grep( /^test$/, @array )), undef, 'ListDBs')
 	    or !$verbose or print("'test' database not in db list.\n");
 	
 	# Does ListTables now find our $firsttable?
@@ -409,7 +420,8 @@ while (Testing()) {
     }
     
     # The third connection within a single script. I promise, this will do...
-    Test($state or ($dbh3 = Connect $class($host,"test")))
+    Test($state or ($dbh3 = Connect $class($host,"test")), undef,
+	 'Third connection')
 	or test_error($dbh3, $testNum);
     
     Test($state or ($dbh3->host eq $host))
@@ -482,7 +494,8 @@ while (Testing()) {
     # statement handle here. The corresponding table has been overwritten
     # quite a few times, but as we are dealing with an in-memeory copy, we
     # still have it available
-    Test($state or ("@{$sth->length}" eq "32 32 32"))
+    Test($state or ("@{$sth->length}" eq "32 32 32"), undef,
+	 'Checking $sth->length')
 	 or !$verbose or printf("Error in length array, expected %s,"
 				. " got %s.\n",
 				"32 32 32", "@{$sth->length}");
@@ -555,7 +568,7 @@ while (Testing()) {
     # A non-select should return TRUE, and if anybody tries to use this
     # return value as an object reference, we should not core dump
 
-    Test($state or ($sth = $dbh->query("insert into $firsttable values"
+    Test($state or (($sth) = $dbh->query("insert into $firsttable values"
 				       . " (\047x\047,2,\047y\047)")))
 	or test_error($dbh);
     use vars qw($ref);
@@ -564,9 +577,20 @@ while (Testing()) {
 	local($Msql::QUIET) = 1;
 	eval 'use vars qw($ref); $ref = $sth->fetchrow;';
     }
-    Test($state or ($@ eq ''))
-	or !$verbose or printf("Died while fetching a row from a non-result"
-			       . " handle, error was $@.\n");
+    if ($driver eq 'mysql') {
+	Test($state or ($@ eq ''), undef,
+	     "Fetchrow from non-select handle $sth")
+	    or !$verbose or printf("Died while fetching a row from a"
+				   . " non-result handle, error was $@.\n");
+    } else {
+	Test($state or ($@ ne ''), undef, "Fetchrow from non-select handle")
+	    or !$verbose or print("Fetching a row from a non-result handle",
+				  " without dying.\n");
+	Test($state or ($@ =~ /without a package or object/))
+	    or !$verbose or printf("Fetching row from a non-result handle"
+				   . " produced wrong error message $@.\n");
+    }
+
     Test($state or !defined($ref))
 	or !$verbose or printf("Fetching a row from a non-result handle"
 			       . " returned TRUE ($ref).\n");

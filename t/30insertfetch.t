@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 30insertfetch.t,v 1.1.1.1 1997/08/27 10:32:15 joe Exp $
+#   $Id: 30insertfetch.t,v 1.1804 1997/08/30 15:11:07 joe Exp $
 #
 #   This is a simple insert/fetch test.
 #
@@ -99,15 +99,16 @@ while (Testing()) {
 	   or DbiError($dbh->err, $dbh->errstr);
 
     Test($state or $cursor->execute)
-	   or DbiError($dbh->err, $dbh->errstr);
+	   or DbiError($cursor->err, $cursor->errstr);
 
-    Test($state or !defined($cursor->fetchrow)  &&
-		   (!defined($cursor->errstr) ||
-		    $cursor->errstr eq ''))
-	   or DbiError($dbh->err, $dbh->errstr);
+    my ($row, $errstr);
+    Test($state or (!defined($row = $cursor->fetchrow_arrayref)  &&
+		    (!defined($errstr = $cursor->errstr) ||
+		     $cursor->errstr eq '')))
+	or DbiError($cursor->err, $cursor->errstr);
 
-    Test($state or $cursor->finish)
-	   or DbiError($dbh->err, $dbh->errstr);
+    Test($state or $cursor->finish, "\$sth->finish failed")
+	   or DbiError($cursor->err, $cursor->errstr);
 
     Test($state or undef $cursor || 1);
 

@@ -3,8 +3,8 @@ package Mysql::Statement;
 use strict;
 use vars qw($OPTIMIZE $VERSION $AUTOLOAD);
 
-$VERSION = substr q$Revision: 1.3 $, 10;
-# $Id: Statement.pm,v 1.3 1997/08/27 22:13:20 joe Exp $
+$VERSION = substr q$Revision: 1.1804 $, 10;
+# $Id: Statement.pm,v 1.1804 1997/08/30 15:10:39 joe Exp $
 
 $OPTIMIZE = 0; # controls, which optimization we default to
 
@@ -25,9 +25,11 @@ sub length     { return wantarray ? @{shift->fetchinternal('LENGTH'   )}: shift-
 sub listindices {
     my($sth) = shift;
     my(@result,$i);
-    return () unless &Mysql::IDX_TYPE;
+    if ($sth->isa('Mysql::Statement')  ||  !&Msql::IDX_TYPE) {
+	return ();
+    }
     foreach $i (0..$sth->numfields-1) {
-	next unless $sth->type->[$i] == &Mysql::IDX_TYPE;
+	next unless $sth->type->[$i] == &Msql::IDX_TYPE;
 	push @result, $sth->name->[$i];
     }
     @result;
@@ -71,7 +73,7 @@ sub _leftjustify($$) {
 	|| ($type == Mysql::FIELD_TYPE_STRING())
         || ($type == Mysql::FIELD_TYPE_VAR_STRING());
     } else {
-	$type & (&Mysql::CHAR_TYPE | &Mysql::TEXT_TYPE);
+	$type & (&Msql::CHAR_TYPE | &Msql::TEXT_TYPE);
     }
 }
 
@@ -91,7 +93,7 @@ sub as_string {
 		my($s) = defined $row[$_] ? unctrl($row[$_]) : "NULL";
 		# New in 2.0: a string is longer than it should be
 		if (!$sth->isa('Mysql::Statement')  &&
-		    $sth->type->[$_] == &Mysql::TEXT_TYPE &&
+		    $sth->type->[$_] == &Msql::TEXT_TYPE &&
 		    length($s) > $sth->length->[$_] + 5) {
 		    my $l = length($row[$_]);
 		    $sprintf[$_] = $sth->length->[$_] + 5 + length($l);
@@ -113,12 +115,22 @@ sub as_string {
     } else {
 	for (0..$sth->numfields-1) {
 	    my $l;
-	    if ($sth->type->[$_] == Mysql::INT_TYPE()){
-		$l = 10;
-	    } elsif ($sth->type->[$_] == Mysql::REAL_TYPE()){
-		$l = 16;
+	    if ($sth->isa('Msql::Statement')) {
+		if ($sth->type->[$_] == Msql::INT_TYPE()) {
+		    $l = 10;
+		} elsif ($sth->type->[$_] == Msql::REAL_TYPE()){
+		    $l = 16;
+		} else {
+		    $l = $sth->length->[$_];
+		}
 	    } else {
-		$l = $sth->length->[$_];
+		if ($sth->type->[$_] == Mysql::FIELD_TYPE_LONG()) {
+		    $l = 10;
+		} elsif ($sth->type->[$_] == Mysql::FIELD_TYPE_DOUBLE()){
+		    $l = 16;
+		} else {
+		    $l = $sth->length->[$_];
+		}
 	    }
 	    $l < length($sth->name->[$_]) and $l = length($sth->name->[$_]);
 	    $plusline .= "-" x $l . "+";
@@ -141,7 +153,7 @@ sub as_string {
 	    # New in 2.0: a string is longer than it should be
 	    if (!$sth->isa('Mysql::Statement')  &&
 		$sth->optimize &&
-		$sth->type->[$_] == &Mysql::TEXT_TYPE &&
+		$sth->type->[$_] == &Msql::TEXT_TYPE &&
 		length($prow[$_]) > $sth->length->[$_] + 5
 		) {
 		my $l = length($row[$_]);

@@ -11,33 +11,41 @@ open OUT,">$file" or die "Can\'t create $file: $!";
 
 print "Extracting $file (with variable substitutions)\n";
 
+if ($file =~ /msql/i) {
+    $driver = 'Msql';
+} elsif ($file =~ /mysql/i) {
+    $driver = 'Mysql';
+} else {
+    die "Cannot determine driver";
+}
+
 #
-# Start of pmysql
+# Start of pmsql and pmysql
 #
 
 print OUT <<"!GROK!THIS!";
 $Config{'startperl'}
 !GROK!THIS!
 
-print OUT <<'!NO!SUBS!';
+$script = <<'!NO!SUBS!';
 
-# $Id: pmysql.PL,v 1.2 1997/08/27 22:13:16 joe Exp $
-my $version = substr q$Revision: 1.2 $, 10;
+# $Id: pmysql.PL,v 1.1804 1997/08/30 16:00:21 joe Exp $
+my $version = substr q$Revision: 1.1804 $, 10;
 
 BEGIN {require 5.002;}
 # use strict;      # only for testing. Unfriendly for the user-eval()s
 # $^W = 1;         # too early for readline 0.8
-use Mysql ();
+$driver = '@DRIVER@'; eval "use $driver ()";
 use Term::ReadLine;
 use Carp ();
 
 # term
 
-my $term = new Term::ReadLine 'MysqlPerl Monitor';
+my $term = Term::ReadLine->new("$driverPerl Monitor");
 
 # prompt
 
-my $prompt = "pmysql> ";
+my $prompt = "p" . lc ($driver);
 $readline::rl_completion_function = 'main::complete';
 
 $^W = 1;
@@ -45,46 +53,75 @@ $^W = 1;
 
 # typelabels
 
-my(@typelabel);
-@typelabel[
-	   Mysql::FIELD_TYPE_BLOB(),
-	   Mysql::FIELD_TYPE_CHAR(),
-	   Mysql::FIELD_TYPE_DECIMAL(),
-	   Mysql::FIELD_TYPE_DATE(),
-	   Mysql::FIELD_TYPE_DATETIME(),
-	   Mysql::FIELD_TYPE_DOUBLE(),
-	   Mysql::FIELD_TYPE_FLOAT(),
-	   Mysql::FIELD_TYPE_INT24(),
-	   Mysql::FIELD_TYPE_LONGLONG(),
-	   Mysql::FIELD_TYPE_LONG_BLOB(),
-	   Mysql::FIELD_TYPE_LONG(),
-	   Mysql::FIELD_TYPE_NULL(),
-	   Mysql::FIELD_TYPE_SHORT(),
-	   Mysql::FIELD_TYPE_STRING(),
-	   Mysql::FIELD_TYPE_TINY_BLOB(),
-	   Mysql::FIELD_TYPE_TIMESTAMP(),
-	   Mysql::FIELD_TYPE_TIME(),
-	   Mysql::FIELD_TYPE_VAR_STRING()
-	  ] = qw(
-		 blob,
-		 char,
-		 decimal,
-		 date,
-		 datetime,
-		 double,
-		 float,
-		 int24,
-		 longlong,
-		 longblob,
-		 long,
-		 null,
-		 short,
-		 string,
-		 tinyblob,
-		 timestamp,
-		 time,
-		 varstring
-		);
+my(%typelabel);
+if ($driver eq 'Mysql') {
+    @typelabel{
+        Mysql::FIELD_TYPE_BLOB(),
+	Mysql::FIELD_TYPE_CHAR(),
+	Mysql::FIELD_TYPE_DECIMAL(),
+	Mysql::FIELD_TYPE_DATE(),
+	Mysql::FIELD_TYPE_DATETIME(),
+	Mysql::FIELD_TYPE_DOUBLE(),
+	Mysql::FIELD_TYPE_FLOAT(),
+	Mysql::FIELD_TYPE_INT24(),
+	Mysql::FIELD_TYPE_LONGLONG(),
+	Mysql::FIELD_TYPE_LONG_BLOB(),
+	Mysql::FIELD_TYPE_LONG(),
+	Mysql::FIELD_TYPE_NULL(),
+	Mysql::FIELD_TYPE_SHORT(),
+	Mysql::FIELD_TYPE_STRING(),
+	Mysql::FIELD_TYPE_TINY_BLOB(),
+	Mysql::FIELD_TYPE_TIMESTAMP(),
+	Mysql::FIELD_TYPE_TIME(),
+	Mysql::FIELD_TYPE_VAR_STRING()
+    } = qw(
+	blob,
+	char,
+	decimal,
+	date,
+	datetime,
+	double,
+	float,
+	int24,
+	longlong,
+        longblob,
+	long,
+	null,
+	short,
+	string,
+	tinyblob,
+	timestamp,
+	time,
+	varstring
+    );
+} else {
+    @typelabel{
+        Msql::INT_TYPE(),
+	Msql::CHAR_TYPE(),
+	Msql::REAL_TYPE(),
+        Msql::IDENT_TYPE(),
+        Msql::IDX_TYPE(),
+        Msql::TEXT_TYPE(),
+        Msql::DATE_TYPE(),
+        Msql::UINT_TYPE(),
+        Msql::MONEY_TYPE(),
+        Msql::TIME_TYPE(),
+        Msql::SYSVAR_TYPE(),
+    } = qw(
+        int
+        char 
+        real
+        ident
+        index
+        text
+        date
+        uint
+        money
+        time
+        sys
+    );
+}
+
 
 # host
 
@@ -99,14 +136,28 @@ if (@ARGV && $ARGV[0] eq "-h") {
 my $Less;
 {
     my @path = split ":", $ENV{PATH};
-    $Less = $ENV{PMYSQL_PAGER} || $ENV{PAGER} || find_exe("less",[@path]) ||
-                find_exe("more",[@path]) || "";
+    if ($driver eq 'Mysql'  &&  exists($ENV{PMYSQL_PAGER})) {
+	$Less = $ENV{PMYSQL_PAGER};
+    } elsif ($driver eq 'Msql'  &&  exists($ENV{PMSQL_PAGER})) {
+	$Less = $ENV{PMYSQL_PAGER};
+    } else {
+	$Less = $ENV{PAGER} || find_exe("less",[@path]) ||
+	    find_exe("more",[@path]) || "";
+    }
 }
 
 # database
 
-my $database = $ARGV[0];
-$database ||= "";
+my $database = $ARGV[0]  ||  "";
+
+
+# fancy output/msqlexport functionality
+
+$fancy_output = 1;
+$sepchar = ',';
+$quote = '"';
+$escape = $quote;
+
 
 #
 # Greetings
@@ -115,11 +166,20 @@ $database ||= "";
 {
     my $rl_avail = defined &Term::ReadLine::Perl::readline ? "enabled" : "available (get Term::ReadKey and Term::ReadLine::Perl)";
 
-    print qq{
-pmysql -- interactive mSQL monitor version $version
-Readline support $rl_avail
-
-};
+    my $probe_server;
+    if ($driver eq 'Mysql') {
+	$probe_server = '';
+    } elsif (Msql->connect($host)) {
+	$probe_server = "mSQL " . Msql->getserverinfo . " detected\n";
+    } else {
+	$probe_server = "You seem to run a version of ";
+	$probe_server .= defined(&Msql::IDX_TYPE) ? "mSQL >= 2.0\n" :
+	                                            "mSQL < 2.0\n";
+    }
+    printf ("$prompt -- interactive %s monitor version $version\n",
+	    ($driver eq 'Mysql') ? "MySQL" : "mSQL");
+    print $probe_server;
+    print "Readline support $rl_avail\n\n";
 }
 
 #
@@ -137,7 +197,16 @@ my $Debug = 0; # 1 | 2 | 4;
 # Shell
 #
 
-while ( defined ($_ = $term->readline($prompt)) ) {
+my($indexarg, $indexdes);
+if ($driver eq 'Mysql'  ||  !&Msql::IDX_TYPE()) {
+    $indexarg = "";
+    $indexdes = " or tables";
+} else {
+    $indexarg = " [index]";
+    $indexdes = ", tables or indices";
+}
+
+while ( defined ($_ = $term->readline("$prompt> ")) ) {
 
     #
     # Leading blanks? No
@@ -163,8 +232,6 @@ while ( defined ($_ = $term->readline($prompt)) ) {
     #
 
     } elsif (/^\?/) {
-	my($indexarg) = &Mysql::IDX_TYPE ? " [index]" : "";
-	my($indexdes) = &Mysql::IDX_TYPE ? ", tables or indices" : " or tables";
 	print qq{
 ho[st] <host>                        Set default host (current is "$host")
 da[tabase] <database>                Set default database (current is "$database")
@@ -173,7 +240,7 @@ re[lshow] [-h host] [database] [table]$indexarg
                                            and set default host and database
 ! <anything>                         eval string in perl
 ?                                    print this message
-q[uit]                               leave pmysql
+q[uit]                               leave $prompt
 <anything else>                      query default database on default host
 
 };
@@ -188,23 +255,44 @@ q[uit]                               leave pmysql
     my(@arg) = split " ", $arg;
     next unless defined $command;
 
-    if ($command =~ /^ho(s(t)?)?$/i) {
-
-	# HOST
-
-	$host = $arg[0];
-	print qq{Host set to "$host"\n};
-    } elsif ($command =~ /^da(t(a(b(a(s(e)?)?)?)?)?)?$/i) {
+    if ($command =~ /^da(t(a(b(a(s(e)?)?)?)?)?)?$/i) {
 
 	# DATABASE
 
 	$database = $arg[0] if $arg[0] gt "";
 	print qq{Database set to "$database"\n};
+    } elsif ($command =~ /^e(s(c(a(p(e)?)?)?)?)?$/i) {
+
+	# ESCAPE
+
+	printf("Escape: %s\n", set_quote_or_separator(\$escape, @arg));
+    } elsif ($command =~ /^f(a(n(c(y)?)?)?)?$/i) {
+
+	# FANCY
+
+	printf("Fancy output is %s.\n", fancy(@arg) ? "on" : "off");
+    } elsif ($command =~ /^ho(s(t)?)?$/i) {
+
+	# HOST
+
+	$host = $arg[0];
+	print qq{Host set to "$host"\n};
+    } elsif ($command =~ /^quo(t(e)?)?$/i) {
+
+	# QUOTE
+
+	printf("Quote: %s\n", set_quote_or_separator(\$quote, @arg));
     } elsif ($command =~ /^re(l(s(h(o(w)?)?)?)?)?$/i) {
 
 	# RELSHOW
 
 	print relshow(@arg);
+    } elsif ($command =~ /^sep(a(r(a(t(o(r)?)?)?)?)?)?$/i) {
+
+	# SEPARATOR
+
+	printf("Separator: %s\n", set_quote_or_separator(\$sepchar, @arg));
+
     } elsif ($command =~ /^q(u(i(t)?)?)?$/i) {
 
 	# QUIT
@@ -219,18 +307,24 @@ q[uit]                               leave pmysql
 	    print "No default database defined\n";
 	    next;
 	}
-	my $Db = Mysql->connect($host,$database) or next;
+	my $Db = $driver->connect($host,$database) or next;
 	s/\\[qgp]$//;
 	$::Q = $Db->query($_) or next;
-	print "Query ok\n";
+	if ($fancy_output) {
+	    print "Query ok\n";
+	}
 	if (ref $::Q) {
 	    $::Q->optimize(1);
-	    if ($Less) {
+	    if ($Less && ((lc $Less) ne 'stdout')) {
 		open OUT, "| $Less";
 	    } else {
 		open OUT, ">&STDOUT";
 	    }
-	    print OUT $::Q->as_string;
+ 	    if ($fancy_output) {
+ 		print OUT $::Q->as_string;
+ 	    } else {
+ 		print OUT sep_out($sepchar);
+ 	    }
 	    close OUT;
 	}
     }
@@ -250,21 +344,46 @@ sub complete {
     print STDERR "complete line[$line] pos[$pos]" if $Debug & 2;
     $line =~ s/^\s*//;
     return
-	$pos == 0 ? grep /^$word/i, ('!','?','create','database','delete from','drop table','host','insert into','quit','relshow','select','update') :
+	$pos == 0 ? grep /^$word/i, ('!', '?', 'create', 'database', 'escape',
+				     'delete from', 'drop table', 'fancy',
+				     'host', 'insert into', 'quit', 'quote',
+				     'relshow', 'separator', 'select',
+				     'update') :
 	$line =~ /^[\!\?qch]/i ? () :                                  # quit, create, host
 	$line =~ /^da/i ? complete_database($word) :		       # database
 	$line =~ /^de/i ? complete_table_or_field($word,$line) :       # delete
 	$line =~ /^dr/i ? complete_table($word,$line) :		       # drop
+	$line =~ /^e/i ? complete_option($word,$line) :		       # escape
+	$line =~ /^f/i ? complete_option($word,$line) :                # fancy
 	$line =~ /^in/i ? complete_table_or_field($word,$line) :       # insert
+	$line =~ /^quo/i ? complete_option($word,$line) :              # quote
 	$line =~ /^re/i ? complete_for_relshow($word,$line) :          # relshow
 	$line =~ /^se/i ? complete_table_or_field($word,$line) :       # select
+	$line =~ /^sep/i ? complete_option($word,$line) :              # separator
 	$line =~ /^up/i ? complete_table_or_field($word,$line) : ();   # update
 }
 
 sub complete_database {
     my($word) = shift;
-    grep /^\Q$word/, Mysql->connect($host)->listdbs;
+    grep /^\Q$word/, $driver->connect($host)->listdbs;
 }
+
+
+sub complete_option {
+    my($word,$line) = @_;
+    if ($line =~ /^fancy/) {
+ 	if ($fancy_output) {
+ 	    return "off";
+ 	} else {
+ 	    return "on";
+ 	}
+    } elsif ($line =~ /^(separator|quote|escape)/) {
+ 	grep /^\Q$word/, qw(space tab null);
+    } else {
+	'';
+    }
+}
+ 
 
 sub complete_for_relshow {
     my($word,$line) = @_;
@@ -272,7 +391,7 @@ sub complete_for_relshow {
 #    system '/usr/sbin/sfplay', '/usr/adm/alarmsnd/woodblock.aiff';
 #    @::Gl = ([@t]);
     if (@t==4 && $word eq $t[3] || @t==3 && $word eq "") {
-	my $sth = Mysql->connect($host, $t[1])->listfields($t[2]);
+	my $sth = $driver->connect($host, $t[1])->listfields($t[2]);
 	my(@idx) = $sth->listindices;
 	my(@fitidx) = grep /^\Q$word/, @idx;
 #	push @::Gl, $sth, [@idx], [@fitidx]; # for debugging only
@@ -288,7 +407,7 @@ sub complete_table {
     print STDERR "word[$word] line[$line] db[$db]" if $Debug & 1;
     $db ||= $database;
     return () unless $db;
-    grep /^\Q$word/, Mysql->connect($host, $db)->listtables;
+    grep /^\Q$word/, $driver->connect($host, $db)->listtables;
 }
 
 sub complete_table_or_field {
@@ -308,8 +427,8 @@ sub complete_table_or_field {
 	$line =~ /^r\w+\s+\w+\s+(\w+)/ || # relshow
 	$line =~ /^i.*\sinto\s+(\w+)/ # insert
 	;
-    my(@table) = $table ? $table : Mysql->connect($host, $database)->listtables;
-    my($db,%fields,@fields) = Mysql->connect($host, $database);
+    my(@table) = $table ? $table : $driver->connect($host, $database)->listtables;
+    my($db,%fields,@fields) = $driver->connect($host, $database);
     for $table (@table) {
 	my $st = $db->listfields($table) or next;
 	@fields = $st->name;
@@ -337,24 +456,60 @@ sub longest {
     $l;
 }
 
+
+sub fancy {
+    my $arg = shift || '';
+
+    if ($arg eq 'off') {
+	$fancy_output = 0;
+    } elsif ($arg eq 'on') {
+	$fancy_output = 1;
+    }
+    $fancy_output;
+}
+
+sub set_quote_or_separator {
+    my $ref = shift;
+    my ($arg, $ret);
+
+    if (defined($arg = shift)) {
+	if ($arg eq 'space') {
+	    $$ref = " ";
+	} elsif ($arg eq 'tab') {
+	    $$ref = "\t";
+	} elsif ($arg eq 'null'  ||  $arg eq 'off') {
+	    undef($$ref);
+	} else {
+	    $$ref = join('',$arg,@_);
+	}
+    }
+    if (!defined($$ref)) {
+	$ret = 'off';
+    } elsif ($$ref eq ' ') {
+	$ret = 'space';
+    } elsif ($$ref eq '\t') {
+	$ret = 'tab';
+    } else {
+	$ret = "'$$ref'";
+    }
+    $ret;
+}
+
+
 sub relshow {
     if (@_ && $_[0] eq "-h") {
 	shift @_;
 	$host = shift @_ or die usage();
     }
 
-    if (@_ > 2){
-	if (&Mysql::IDX_TYPE) {
-	    return "Usage: relshow [-h host] [database] [table] [index]\n" if @_ > 3;
-	} else {
-	    return "Usage: relshow [-h host] [database] [table]\n";
-	}
+    if (($indexarg  &&  @_ > 3)  ||  (!$indexarg  &&  @_ > 2)) {
+	return "Usage: relshow [-h host] [database] [table]$indexarg\n";
     }
 
     my @m;
 
     push @m, "Host = $host\n" if $host;
-    my $Dbh = Mysql->connect($host) or return;
+    my $Dbh = $driver->connect($host) or return;
 
     my($table,$bottok,$sorry,$i);
 
@@ -377,6 +532,12 @@ sub relshow {
 		return "Too many arguments to relshow\n"
 			unless $Dbh->getserverinfo ge 2;
 		#warn join ":", grep //, $sth->name;
+		if ($driver eq 'Msql'  &&  $index eq "_seq") {
+		    my(@seq) = $Dbh->getsequenceinfo($table);
+		    push(@m, "Sequence Step  = $seq[0]\n"
+			     . "Sequence Value = $seq[1]\n");
+		    return join "", @m;
+		}
 		grep(/^\Q$index\E$/, $sth->name)
 			or return join "", @m, qq{Index "$index" not found\n};
 		push @m, qq{Index      = $index\n};
@@ -402,21 +563,34 @@ sub relshow {
 	    #
 
 	    my $fieldwidth = longest($sth->name,"Field") || 15;
-	    my $keywidth = $Dbh->getserverinfo lt 2 ? 3 : 12;
-	    my $keytitle = $Dbh->getserverinfo lt 2 ? "Key" : "Unique Index";
+	    my ($keywidth, $keytitle);
+	    if ($driver eq 'Mysql'  ||  $driver->getserverinfo lt 2) {
+		$keywidth = 3;
+		$keytitle = "Key";
+	    } else {
+		$keywidth = 12;
+		$keytitle = "Unique Index";
+	    }
 	    my $border = " +-".("-"x$fieldwidth)."-+-----------+--------+----------+-".("-"x$keywidth)."-+\n";
 	    push @m, $border;
 	    push @m, sprintf " | %-".$fieldwidth."s | Type      | Length | Not Null | %-".$keywidth."s |\n", "Field", $keytitle;
 	    push @m, $border;
 	    my $max = $sth->numfields;
 	    for ($i=0;$i<$max;$i++){
-		my $keyNO = $Dbh->getserverinfo lt 2 ? "N" :
-		    $sth->type->[$i]==Mysql::IDX_TYPE() ? "N" : "N/A";
+		my $keyNO;
+		if ($driver eq 'Mysql'  ||  $driver->getserverinfo lt 2  ||
+		    $sth->type->[$i] == &Msql::IDX_TYPE()) {
+		    $keyNO = "N";
+		} else {
+		    $keyNO = "N/A";
+		}
 		push @m, sprintf " | %-".$fieldwidth."s | %-9s | %6s |    %-3s   | %-".$keywidth."s |\n",
 			$sth->name->[$i],
-			$typelabel[$sth->type->[$i]] || ("unknown-".$sth->type->[$i]),
+			$typelabel{$sth->type->[$i]} || ("unknown-".$sth->type->[$i]),
 			($sth->length->[$i] || "N/A"),
-			$sth->is_not_null->[$i] ? " Y " : $sth->type->[$i]!=Mysql::IDX_TYPE() ? " N " : "N/A",
+			$sth->is_not_null->[$i] ? " Y " : 
+			    ($driver eq 'Mysql' ||
+			     $sth->type->[$i]!=Msql::IDX_TYPE()) ? " N " : "N/A",
 			$sth->is_pri_key->[$i] ? "Y" : $keyNO;
 	    }
 	    push @m, "$border\n";
@@ -461,36 +635,83 @@ $border  |    Databases     |\n$border} ;
     return join "", @m;
 }
 
+sub sep_out {
+    my($sep) = shift;
+    my(@arr, @res);
+    my($epattern, $qpattern, $null);
+
+    if (defined($escape)  &&  $escape ne '') {
+	$epattern = $escape;
+	$epattern =~ s/(.)/\\$1/g;
+	if (defined($quote)  &&  $quote ne '') {
+	    $qpattern = $quote;
+	    $qpattern =~ s/(.)/\\$1/g;
+	    if ($epattern) {
+		$epattern = "$epattern|$qpattern";
+	    } else {
+		$epattern = $qpattern;
+	    }
+	}
+	$epattern = "($epattern|\\0)";
+    } else {
+	$epattern = '';
+    }
+    $null = 0;
+
+    print "escape = $escape, epattern = $epattern\n";
+    print "quote = $quote, qpattern = $qpattern\n";
+    print "separator = $sepchar\n";
+
+    while (@arr = $::Q->fetchrow()) {
+	foreach $word (@arr) {
+	    if ($epattern) {
+		$word =~ s/($epattern)/$escape$1/g;
+	    }
+	    if ($quote) {
+		$word = "$quote$word$quote";
+	    }
+	}
+	push(@res, join($sepchar, @arr) . "\n");
+    }
+    return @res;
+}
+
+
 sub usage () {"Usage: $0 [-h host] database";}
 
 __END__
 
 =head1 NAME
 
-pmysql - interactive shell with readline for msql
+pmsql, pmysql - interactive shells with readline for msql and mysql
 
 =head1 SYNOPSIS
+
+C<pmsql [-h host] [database]>
+
+or
 
 C<pmysql [-h host] [database]>
 
 =head1 DESCRIPTION
 
-pmysql lets you talk to a running mysql daemon sending either SQL
-queries or relshow commands. The output is formatted much in the same
-way as by the msql monitor (see below) and the relshow program, which
-are both coming with msql. The additional capability is a connection
-to a readline interface (if available) and a pipe to your favorite
-pager. Additionally you may switch between hosts and databases within
-one session and you don't have to type the nasty C<\g> (a trailing
-C<\g>, C<\q>, and C<\p> will be ignored).
+pmsql and pmysql let you talk to a running msql or mysql daemon sending
+either SQL queries or relshow (mysqlshow) commands. The output is
+formatted much in the same way as by the msql or mysql monitor (see below),
+the msqlexport command and the relshow (mysqlshow) program, which are
+coming with msql or mysql. The additional capability is a connection to a
+readline interface (if available) and a pipe to your favorite pager.
+Additionally you may switch between hosts and databases within one session
+and you don't have to type the nasty C<\g> or C<;> (a trailing C<\g>, C<\q>,
+and C<\p> will be ignored).
 
 If a command starts with one of the following reserved words, it's
 treated specially, otherwise it is passed on verbatim to the mSQL
-daemon. Output from the daemon is piped to your pager specified by
-either the PMYSQL_PAGER or the PAGER environment variable. If both are
-undefined, the PATH is searched for either "less" or "more" and the
-first program found is taken. If no pager can be determined, the
-program writes to unfiltered STDOUT.
+or mysql daemon. Output from the daemon is piped to your pager specified by
+either the PMSQL_PAGER (PMYSQL_PAGER) or the PAGER environment variable. If
+both are undefined, the PATH is searched for either "less" or "more" and the
+first program found is taken. If no pager can be determined, or your pager
+variable contains the word C<stdout>, the program writes to unfiltered STDOUT.
 
 =over 2
 
@@ -498,27 +719,51 @@ program writes to unfiltered STDOUT.
 
 print usage summary and current host and database
 
-=item C<ho[st] host>
-
-Set default host to "host"
-
 =item C<da[tabase] database>
 
 Set default database to "database"
 
+=item C<e[scape]>
+
+Set the escape character which is used when I<fancy> mode is off.
+Defaults to C<">.
+
+=item C<f[ancy] on|off>
+
+Set the output format of I<SELECT> commands, default is C<on>. A value of
+C<off> will create output suitable for export to other database systems.
+The non-fancy output format is configurable with the commands I<escape>,
+I<quote> and I<separator>, the default is well suited for import into
+I<Microsoft Ecxel>.
+
+=item C<ho[st] host>
+
+Set default host to "host"
+
+=item C<q[uit]>
+
+Leave pmsql or pymsql
+
+=item C<quo[te]>
+
+Set the quote character which is used when I<fancy> mode is off.
+Defaults to C<">.
+
 =item C<re[lshow] [-h host] [database] [table] [index]>
 
 Describe databases or tables in the same way as done by the relshow
-program. If host or database are specified, the defaults are set to
-these values. The prameter C<index> is only supported for mSQL-2.0.
+(mysqlshow) program. If host or database are specified, the defaults
+are set to these values. The prameter C<index> is only supported for
+mSQL-2.0.
+
+=item C<s[eparator]>
+
+Set the quote character which is used when I<fancy> mode is off.
+Defaults to C<,>.
 
 =item C<! EXPR>
 
 Eval the EXPR in perl
-
-=item C<q[uit]>
-
-Leave pymsql
 
 =back
 
@@ -532,9 +777,9 @@ connect to the database for each command separately.
 
 =head2 Completion
 
-pmysql comes with some basic completion definitions that are far from
-being perfect. Completion means, you can use the TAB character to run
-some lookup routines on the current host or database and use the
+pmsql and pmysql come with some basic completion definitions that are
+far from being perfect. Completion means, you can use the TAB character
+to run some lookup routines on the current host or database and use the
 results to save a few keystrokes.
 
 The completion mechanism is very basic, and I'm not intending to
@@ -544,10 +789,10 @@ have here.
 
 =head1 BUGS
 
-pmysql is not an mysql clone. If you use it as such for bulk uploads
-into the database, you will notice an enourmous disadvantage in
-performance. The reason is that pmysql intentionally disconnects from
-the database after every query.
+pmsql and pmysql are not an msql and mysql clones. If you use it as
+such for bulk uploads into the database, you will notice an enourmous
+disadvantage in performance. The reason is that pmsql and pmysql
+intentionally disconnect from the database after every query.
 
 =head1 SEE ALSO
 
@@ -557,14 +802,17 @@ arrow keys in a meaningful manner. Term::ReadKey and Term::ReadLine do
 not come with the perl distribution but are available from CPAN (see
 http://www.perl.com/CPAN).
 
-See Mysql, Term::ReadKey, Term::ReadLine.
+See Msql, Mysql, Term::ReadKey, Term::ReadLine.
 
 =cut
 
 !NO!SUBS!
 
+$script =~ s/\@DRIVER\@/$driver/;
+print OUT $script;
+
 #
-# End of pmysql
+# End of pmsql and pmysql
 #
 
 close OUT or die "Can't close $file: $!";

@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 40blobs.t,v 1.1.1.1 1997/08/27 10:32:15 joe Exp $
+#   $Id: 40blobs.t,v 1.1804 1997/08/30 15:11:08 joe Exp $
 #
 #   This is a test for correct handling of BLOBS; namely $dbh->quote
 #   is expected to work correctly.
@@ -25,6 +25,7 @@
 #
 #   Make -w happy
 #
+$::verbose = defined($::verbose) ? $::verbose : 0;
 $test_dsn = '';
 $test_user = '';
 $test_password = '';
@@ -45,6 +46,7 @@ foreach $file ("lib.pl", "t/lib.pl") {
 }
 
 sub ServerError() {
+
     print STDERR ("Cannot connect: ", $DBI::errstr, "\n",
 	"\tEither your server is not up and running or you have no\n",
 	"\tpermissions for acessing the DSN $test_dsn.\n",
@@ -53,6 +55,20 @@ sub ServerError() {
 	"\tpermissions, then retry.\n");
     exit 10;
 }
+
+
+sub ShowBlob($) {
+    my ($blob) = @_;
+    for($i = 0;  $i < 8;  $i++) {
+	if (defined($blob)  &&  length($blob) > $i) {
+	    $b = substr($blob, $i*32);
+	} else {
+	    $b = "";
+	}
+	printf("%08lx %s\n", $i*32, unpack("H64", $b));
+    }
+}
+
 
 #
 #   Main loop; leave this untouched, put tests after creating
@@ -68,7 +84,7 @@ while (Testing()) {
     #   Find a possible new table name
     #
     Test($state or $table = FindNewTable($dbh))
-	   or DbiError($dbh->err, $dbh->errstr);
+	   or DbiError($dbh->error, $dbh->errstr);
 
     foreach $size (128) {
 	#
@@ -84,7 +100,7 @@ while (Testing()) {
 	#
 	#  Create a blob
 	#
-	my $blob = "";
+	my ($blob, $qblob) = "";
 	if (!$state) {
 	    my $b = "";
 	    for ($j = 0;  $j < 256;  $j++) {
@@ -93,13 +109,20 @@ while (Testing()) {
 	    for ($i = 0;  $i < $size;  $i++) {
 		$blob .= $b;
 	    }
+	    if ($driver eq 'pNET') {
+		# Quote manually, no remote quote
+		use DBD::mysql;
+		$qblob = DBD::mysql::db->quote($blob);
+	    } else {
+		$qblob = $dbh->quote($blob);
+	    }
 	}
 
 	#
 	#   Insert a row into the test table.......
 	#
         Test($state or $dbh->do("INSERT INTO $table VALUES(1, "
-				. $dbh->quote($blob) . ")"))
+				. $qblob . ")"))
 	       or DbiError($dbh->err, $dbh->errstr);
 
 	#
@@ -112,17 +135,18 @@ while (Testing()) {
 	Test($state or $cursor->execute)
 	       or DbiError($dbh->err, $dbh->errstr);
 
-	if (!$state) {
-	    @row = $cursor->fetchrow_array;
-	}
-	Test($state or @row  &&  $row[0] == 1  &&  $row[1] eq $blob)
-	       or DbiError($dbh->err, $dbh->errstr);
+	Test($state or (defined($row = $cursor->fetchrow_arrayref)))
+	    or DbiError($cursor->err, $cursor->errstr);
+
+	Test($state or (@$row == 2  &&  $$row[0] == 1  &&  $$row[1] eq $blob))
+	    or !$verbose or (ShowBlob($blob),
+			     ShowBlob(defined($$row[1]) ? $$row[1] : ""));
 
 	Test($state or $cursor->finish)
-	       or DbiError($dbh->err, $dbh->errstr);
+	       or DbiError($cursor->err, $cursor->errstr);
 
 	Test($state or undef $cursor || 1)
-	       or DbiError($dbh->err, $dbh->errstr);
+	       or DbiError($cursor->err, $cursor->errstr);
 
 	#
 	#   Finally drop the test table.

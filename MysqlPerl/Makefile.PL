@@ -1,5 +1,14 @@
 use ExtUtils::MakeMaker;
 
+my $mref = sub {
+    $line = shift;
+    if ($line =~ /^\s*MODULE\s+=/) {
+	$line =~ s/Msql/Mysql/g;
+    }
+    $line;
+};
+Mysql::Config::Modify("Mysql.xs", "Mysql.xs", $mref);
+
 sub config () {
     my $ref = &Mysql::Config::initialize();
     %hash = %$ref;

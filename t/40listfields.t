@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 40listfields.t,v 1.1.1.1 1997/08/27 10:32:15 joe Exp $
+#   $Id: 40listfields.t,v 1.1804 1997/08/30 15:11:08 joe Exp $
 #
 #   This is a test for statement attributes being present appropriately.
 #
@@ -89,18 +89,19 @@ while (Testing()) {
 	   or DbiError($dbh->err, $dbh->errstr);
 
     Test($state or $cursor->execute)
-	   or DbiError($dbh->err, $dbh->errstr);
+	   or DbiError($cursor->err, $cursor->errstr);
 
-    Test($state or $cursor->{'NUM_OF_FIELDS'} == @table_def)
-	   or DbiError($dbh->err, $dbh->errstr);
+    my $res;
+    Test($state or (($res = $cursor->{'NUM_OF_FIELDS'}) == @table_def))
+	   or DbiError($cursor->err, $cursor->errstr);
     if (!$state && $verbose) {
-	print "Number of fields: ", $cursor->{'NUM_OF_FIELDS'}, "\n";
+	printf("Number of fields: %s\n", defined($res) ? $res : "undef");
     }
 
     Test($state or ($ref = $cursor->{'NAME'})  &&  @$ref == @table_def
 	            &&  $$ref[0] eq $table_def[0][0]
 		    &&  $$ref[1] eq $table_def[1][0])
-	   or DbiError($dbh->err, $dbh->errstr);
+	   or DbiError($cursor->err, $cursor->errstr);
     if (!$state && $verbose) {
 	print "Names:\n";
 	for ($i = 0;  $i < @$ref;  $i++) {
@@ -111,7 +112,7 @@ while (Testing()) {
     Test($state or ($ref = $cursor->{'NULLABLE'})  &&  @$ref == @table_def
 		    &&  !($$ref[0] xor ($table_def[0][3] & $COL_NULLABLE))
 		    &&  !($$ref[1] xor ($table_def[1][3] & $COL_NULLABLE)))
-	   or DbiError($dbh->err, $dbh->errstr);
+	   or DbiError($cursor->err, $cursor->errstr);
     if (!$state && $verbose) {
 	print "Nullable:\n";
 	for ($i = 0;  $i < @$ref;  $i++) {

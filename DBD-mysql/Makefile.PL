@@ -38,8 +38,11 @@ test:
 }
 
 sub config () {
-    my $ref = Mysql::Config::initialize();
-    my %hash = %$ref;
+    my %hash;
+    if (defined(&Mysql::Config::initialize)) {
+	my $ref = Mysql::Config::initialize();
+	%hash = %$ref;
+    } 
 
     $hash{'DEFINE'} .= " -DMyConnect=dbd_db_connect";
     \%hash;
