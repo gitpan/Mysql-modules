@@ -1,4 +1,4 @@
-# $Header: /home/joe/cvs/mysql-modules/MysqlPerl/typemap,v 1.1805 1997/09/03 12:21:49 joe Exp $ 
+# $Header: /home/joe/cvs/mysql-modules/MysqlPerl/typemap,v 1.1806 1997/09/03 22:39:47 joe Exp $ 
 
 TYPEMAP
 my_dbh_t		T_DBH

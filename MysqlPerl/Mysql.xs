@@ -75,19 +75,19 @@ static const char* QuietVar  = "Mysql::QUIET";
 
 
 #ifdef DBD_MSQL
-#define readMYSOCKET                            \
-  if ((svp = hv_fetch(handle,"SOCK",4,0))) {    \
-    sock = SvIV(*svp);                          \
-  } else {                                      \
-    sock = -1;                                  \
+#define readMYSOCKET                                  \
+  if ((svp = hv_fetch((HV*) handle,"SOCK",4,0))) {    \
+    sock = SvIV(*svp);                                \
+  } else {                                            \
+    sock = -1;                                        \
   }
 #define validSOCKET (sock != -1)
 #else
-#define readMYSOCKET                            \
-  if ((svp = hv_fetch(handle,"SOCK",4,0))) {    \
-    sock = (dbh_t) SvIV(*svp);                  \
-  } else {                                      \
-    sock = NULL;                                \
+#define readMYSOCKET                                  \
+  if ((svp = hv_fetch((HV*) handle,"SOCK",4,0))) {    \
+    sock = (dbh_t) SvIV(*svp);                        \
+  } else {                                            \
+    sock = NULL;                                      \
   }
 #define validSOCKET (sock != NULL)
 #endif
@@ -117,16 +117,18 @@ static const char* QuietVar  = "Mysql::QUIET";
 
 #define iniAV 	av = (AV*)sv_2mortal((SV*)newAV())
 
-#define MYPERL_FETCH_INTERNAL(a)	\
-      iniAV;				\
-      MyFieldSeek(result,0);		\
-      numfields = MyNumFields(result);  \
-      while (off< numfields){		\
-	curField = MyFetchField(result);\
-	a				\
-	off++;				\
-      }					\
-      RETVAL = newRV((SV*)av)
+#define MYPERL_FETCH_INTERNAL(a)	        \
+      if (result) {                             \
+          iniAV;				\
+          MyFieldSeek(result,0);		\
+          numfields = MyNumFields(result);      \
+          while (off< numfields) {		\
+	      curField = MyFetchField(result);  \
+	      a				        \
+	      off++;				\
+          }					\
+          RETVAL = newRV((SV*)av);              \
+      }
 
 #ifdef DBD_MYSQL
 #define checkRETVAL(r)                    \
@@ -216,15 +218,15 @@ fetchinternal(handle, key)
 	MYPERL_FETCH_INTERNAL(av_push(av,(SV*)newSVpv(curField->name,strlen(curField->name))););
     }
     else if (strEQ(key, "NUMFIELDS")){
-      RETVAL = newSViv((IV)MyNumFields(result));
+	RETVAL = newSViv(result ? (IV)MyNumFields(result) : (IV) 0);
     }
     else if (strEQ(key, "NUMROWS")){
-      RETVAL = newSViv((IV)MyNumRows(result));
+	RETVAL = newSViv(result ? (IV)MyNumRows(result) : (IV) 0);
     }
     break;
   case 'R':
     if (strEQ(key, "RESULT"))
-      RETVAL = newSViv((IV)result);
+	RETVAL = newSViv((IV)result);
     break;
   case 'T':
     if (strEQ(key, "TABLE")) {
@@ -464,7 +466,7 @@ errmsg(handle=NULL)
    OUTPUT:
    RETVAL
 
-char *
+int
 errno(handle=NULL)
    SV* handle
    PROTOTYPE: ;$
@@ -539,7 +541,7 @@ getserverinfo(handle=NULL)
      OUTPUT:
      RETVAL
 
-SV*
+int
 getprotoinfo(handle=NULL)
    my_dbh_t handle
    PROTOTYPE: ;$
@@ -550,13 +552,13 @@ getprotoinfo(handle=NULL)
    SV** svp;
    readMYSOCKET;
    if (validSOCKET) {
-     char* proto = MyGetProtoInfo(sock);
-     RETVAL = sv_2mortal(newSVpv(proto, strlen(proto)));
+     unsigned int proto = MyGetProtoInfo(sock);
+     RETVAL = proto;
    } else {
      XSRETURN_UNDEF;
    }
 #else
-   RETVAL = sv_2mortal(newSViv(MyGetProtoInfo(sock)));
+   RETVAL = MyGetProtoInfo(sock);
 #endif
 }
    OUTPUT:
@@ -890,7 +892,7 @@ query(handle, query)
       hv_store(hv, "INSERTID", 9, newSViv((IV)mysql_insert_id(sock)), 0);
       hv_store(hv,"SOCK",9,newSViv((IV)sock),0);
       rv = newRV((SV*)hv);
-      stash = gv_stashpv(StPackage, TRUE);
+      stash = gv_stashpv((char*) StPackage, TRUE);
       ST(0) = sv_2mortal(sv_bless(rv, stash));      
 #endif
     }

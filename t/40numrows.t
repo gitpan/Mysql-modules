@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 40numrows.t,v 1.1805 1997/09/03 12:22:35 joe Exp $
+#   $Id: 40numrows.t,v 1.1806 1997/09/03 22:41:04 joe Exp $
 #
 #   This tests, whether the number of rows can be retrieved.
 #

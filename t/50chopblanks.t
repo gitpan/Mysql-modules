@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 50chopblanks.t,v 1.1805 1997/09/03 12:22:35 joe Exp $
+#   $Id: 50chopblanks.t,v 1.1806 1997/09/03 22:41:04 joe Exp $
 #
 #   This driver should check whether 'ChopBlanks' works.
 #

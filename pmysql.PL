@@ -29,8 +29,8 @@ $Config{'startperl'}
 
 $script = <<'!NO!SUBS!';
 
-# $Id: pmysql.PL,v 1.1805 1997/09/03 12:19:58 joe Exp $
-my $version = substr q$Revision: 1.1805 $, 10;
+# $Id: pmysql.PL,v 1.1806 1997/09/03 22:38:55 joe Exp $
+my $version = substr q$Revision: 1.1806 $, 10;
 
 BEGIN {require 5.002;}
 # use strict;      # only for testing. Unfriendly for the user-eval()s
@@ -46,7 +46,14 @@ my $term = Term::ReadLine->new("$driverPerl Monitor");
 # prompt
 
 my $prompt = "p" . lc ($driver);
-$readline::rl_completion_function = 'main::complete';
+if ($term->ReadLine eq "Term::ReadLine::Gnu") {
+    my $attribs = $term->Attribs;
+    $attribs->{'attempted_completion_function'} = \&complete_gnu;
+    $attribs->{'completion_entry_function'} =
+	$attribs->{'list_completion_function'};
+} else {
+    $readline::rl_completion_function = 'main::complete';
+}
 
 $^W = 1;
 # $SIG{'__WARN__'} = sub { warn Carp::longmess(@_); };
@@ -164,7 +171,16 @@ $escape = $quote;
 #
 
 {
-    my $rl_avail = defined &Term::ReadLine::Perl::readline ? "enabled" : "available (get Term::ReadKey and Term::ReadLine::Perl)";
+    my ($rl_package) = $term->ReadLine;
+    my $rl_avail;
+    if ($rl_package eq "Term::ReadLine::Perl"  ||
+	$rl_package eq "Term::ReadLine::readline_pl"  ||
+	$rl_package eq "Term::ReadLine::Gnu") {
+	$rl_avail = "enabled";
+    } else {
+	$rl_avail = "available (get Term::ReadKey and"
+	  . " Term::ReadLine::[Perl|GNU])";
+    }
 
     my $probe_server;
     if ($driver eq 'Mysql') {
@@ -361,6 +377,12 @@ sub complete {
 	$line =~ /^se/i ? complete_table_or_field($word,$line) :       # select
 	$line =~ /^sep/i ? complete_option($word,$line) :              # separator
 	$line =~ /^up/i ? complete_table_or_field($word,$line) : ();   # update
+}
+
+sub complete_gnu(@) {
+    my (@poss) = complete(@_);
+    my $attribs = $term->Attribs;
+    $attribs->{'completion_word'} = \@poss;
 }
 
 sub complete_database {

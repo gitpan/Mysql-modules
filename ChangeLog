@@ -1,7 +1,15 @@
-$Id: ChangeLog,v 1.1805 1997/09/03 12:19:57 joe Exp $
+$Id: ChangeLog,v 1.1806 1997/09/03 22:38:55 joe Exp $
 
 DBD::mysql for DBI - Written by Jochen Wiedmann <wiedmann@neckar-alb.de>
 
+97.09.03  V1.1806
+          Fixed bug in Mysql.xs: $sth->numfields dumped core because no
+	  check for a result was done.
+	  Fixed bug in lib/Mysql/Statement.pm: Mysql::Statement.as_string
+	  did not check for $sth->numfields != 0.
+	  Added patch from Nem W. Schlecht (nem@abattoir.cc.ndsu.nodak.edu)
+	  for Term::ReadLine::GNU support to pmysql and dbimon.
+	
 97.09.03  V1.1805
 	  Fixed bug in DBD::mysql: Executing a non-select statement
 	  always returned -1 (unknown number of rows) although the
@@ -20,7 +28,8 @@ DBD::mysql for DBI - Written by Jochen Wiedmann <wiedmann@neckar-alb.de>
 	
 97.08.30  V1.1804
 	  Added "fancy", "quote", "separator" and "escape" commands to
-	  pm(y)sql.PL.
+	  pm(y)sql.PL, patch supplied by Nem W Schlecht
+	  (nem@abattoir.cc.ndsu.nodak.edu).
 	  Modified pm(y)sql.PL and pmsql.PL so that it automatically
 	  adapts pm(y)sql for use with Msql and Mysql, respectively.
 	  Makefile.PL and M(y)sqlPerl/Makefile.PL now automatically

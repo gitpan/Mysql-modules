@@ -718,8 +718,11 @@ while (Testing()) {
 			       . " %s <-> %s.\n", $hash{'ascii'},
 			       $hash{'chr'}, chr($hash{'ascii'}));
 
-    Test($state or $dbh->query("drop table $firsttable"))
+    Test($state or ($sth = $dbh->query("drop table $firsttable")))
 	or test_error($dbh);
+    Test($state or ($sth->numfields == 0))
+	or !$verbose or printf("Expected num fields being zero, not %s.\n",
+			       $sth->numfields);
 
     # mSQL up to 1.0.16 had this annoying lost table bug, so I try to
     # force our users to upgrade somehow

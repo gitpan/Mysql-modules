@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 40listfields.t,v 1.1805 1997/09/03 12:22:34 joe Exp $
+#   $Id: 40listfields.t,v 1.1806 1997/09/03 22:41:03 joe Exp $
 #
 #   This is a test for statement attributes being present appropriately.
 #
@@ -124,9 +124,16 @@ while (Testing()) {
 
 
     #
-    #   Finally drop the test table.
+    #  Drop the test table
     #
-    Test($state or $dbh->do("DROP TABLE $table"))
-	   or DbiError($dbh->err, $dbh->errstr);
+    Test($state or ($cursor = $dbh->prepare("DROP TABLE $table")))
+	or DbiError($dbh->err, $dbh->errstr);
+    Test($state or $cursor->execute)
+	or DbiError($cursor->err, $cursor->errstr);
 
+    #  NUM_OF_FIELDS should be zero (Non-Select)
+    Test($state or ($cursor->{'NUM_OF_FIELDS'} == 0))
+	or !$verbose or printf("NUM_OF_FIELDS is %s, not zero.\n",
+			       $cursor->{'NUM_OF_FIELDS'});
+    Test($state or (undef $cursor) or 1);
 }

@@ -876,6 +876,11 @@ sub Complete () {
     }
 }
 
+sub CompleteGnu (@) {
+    my(@poss) = Complete(@_);
+    $term->Attribs->{'completion_word'} = \@poss;
+}
+
 
 ############################################################################
 #
@@ -1003,9 +1008,24 @@ dbimon $VERSION Copyright (C) 1997 Jochen Wiedmann
 
     if (!$batchMode) {
 	$term = Term::ReadLine->new("dbimon $VERSION");
-	$readline::rl_completion_function = 'main::Complete';
-	my $rl_avail = defined &Term::ReadLine::Perl::readline ? "enabled" :
-	    "available (get Term::ReadKey and Term::ReadLine::Perl)";
+	my ($rl_package) = $term->ReadLine;
+	my ($rl_avail);
+	if ($rl_package eq "Term::ReadLine::Gnu") {
+	    my $attribs = $term->Attribs;
+	    $attribs->{'attempted_completion_function'} = \&CompleteGnu;
+	    $attribs->{'completion_entry_function'} =
+		$attribs->{'list_completion_function'};
+	    $rl_avail = 'enabled';
+	} else {
+	    $readline::rl_completion_function = 'main::Complete';
+	    if ($rl_package eq 'Term::ReadLine::Perl'  ||
+		$rl_package eq 'Term::ReadLine::readline_pl') {
+		$rl_avail = 'enabled';
+	    } else {
+		$rl_avail = "available (get Term::ReadKey and"
+		  . " Term::ReadLine::[Perl|GNU])";
+	}
+
 	my $serverinfo = eval { $dbh->func('getserverinfo'); };
 	if (!defined($serverinfo)  ||  !$@) {
 	    $serverinfo = 'No server information available';
@@ -1123,6 +1143,8 @@ dbimon $VERSION Copyright (C) 1997 Jochen Wiedmann
 
 
 __END__
+
+=pod
 
 =head1 NAME
 

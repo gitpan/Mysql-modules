@@ -3,8 +3,8 @@ package Mysql::Statement;
 use strict;
 use vars qw($OPTIMIZE $VERSION $AUTOLOAD);
 
-$VERSION = substr q$Revision: 1.1805 $, 10;
-# $Id: Statement.pm,v 1.1805 1997/09/03 12:22:19 joe Exp $
+$VERSION = substr q$Revision: 1.1806 $, 10;
+# $Id: Statement.pm,v 1.1806 1997/09/03 22:40:28 joe Exp $
 
 $OPTIMIZE = 0; # controls, which optimization we default to
 
@@ -80,6 +80,9 @@ sub _leftjustify($$) {
 sub as_string {
     my($sth) = @_;
     my($plusline,$titline,$sprintf,$result,$s) = ('+','|','|');
+    if ($sth->numfields == 0) {
+	return '';
+    }
     if ($sth->optimize) {
 	my(@sprintf,$l);
 	for (0..$sth->numfields-1) {
