@@ -29,8 +29,8 @@ $Config{'startperl'}
 
 $script = <<'!NO!SUBS!';
 
-# $Id: pmysql.PL,v 1.1806 1997/09/03 22:38:55 joe Exp $
-my $version = substr q$Revision: 1.1806 $, 10;
+# $Id: pmysql.PL,v 1.1809 1997/09/12 18:33:46 joe Exp $
+my $version = substr q$Revision: 1.1809 $, 10;
 
 BEGIN {require 5.002;}
 # use strict;      # only for testing. Unfriendly for the user-eval()s
@@ -46,8 +46,8 @@ my $term = Term::ReadLine->new("$driverPerl Monitor");
 # prompt
 
 my $prompt = "p" . lc ($driver);
+my $attribs = $term->Attribs;
 if ($term->ReadLine eq "Term::ReadLine::Gnu") {
-    my $attribs = $term->Attribs;
     $attribs->{'attempted_completion_function'} = \&complete_gnu;
     $attribs->{'completion_entry_function'} =
 	$attribs->{'list_completion_function'};
@@ -383,6 +383,7 @@ sub complete_gnu(@) {
     my (@poss) = complete(@_);
     my $attribs = $term->Attribs;
     $attribs->{'completion_word'} = \@poss;
+    return;
 }
 
 sub complete_database {

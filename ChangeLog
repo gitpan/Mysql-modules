@@ -1,7 +1,26 @@
-$Id: ChangeLog,v 1.1806 1997/09/03 22:38:55 joe Exp $
+$Id: ChangeLog,v 1.1809 1997/09/12 18:33:45 joe Exp $
 
 DBD::mysql for DBI - Written by Jochen Wiedmann <wiedmann@neckar-alb.de>
 
+97.09.12 V1.1809
+	  Adapted changes from DBD-Oracle 0.46 to 0.47; in particular
+	  the files Driver.xst and dbd_xsh.h from the DBI distribution
+	  are used now. (LongReadLen, LongTruncOk, ... are still
+	  meaningless, but they are not that important for m(y)sql:
+	  The complete results are in RAM anyways ...)
+          Fixed man page of DBD::M(y)SQL: "@names = $sth->{'NAME'}".
+	  Added parameter completion for "set" command to dbimon.
+	
+97.09.08  V1.1808
+	  Fixed bug in dbimon, a closing brace was missing causing a
+	  syntax error.
+	  Fixed problems in the Term::ReadLine::GNU support, reported
+	  by Nem W. Schlecht (nem@abattoir.cc.ndsu.nodak.edu).
+	  Modified dbimon for internally using the Data::ShowTable
+	  module. My thanks to Tim Bunce for the hint.
+	  Compatibility fixes for SunOS and Solaris, supplied by
+	  Neil Bowers (neilb@cre.canon.co.uk).
+	
 97.09.03  V1.1806
           Fixed bug in Mysql.xs: $sth->numfields dumped core because no
 	  check for a result was done.

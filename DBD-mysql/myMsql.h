@@ -34,13 +34,17 @@
  *           Email: wiedmann@neckar-alb.de
  *           Fax: +49 7123 / 14892
  *
- *  $Id: myMsql.h,v 1.1806 1997/09/03 22:39:05 joe Exp $
+ *  $Id: myMsql.h,v 1.1809 1997/09/12 18:34:10 joe Exp $
  */
 
 #ifndef MYMSQL_H_INCLUDED
 #define MYMSQL_H_INCLUDED 1
 
 #include <sys/types.h>
+
+#ifdef __sun__
+extern char** environ;
+#endif
 
 
 /*

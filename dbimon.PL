@@ -1,3 +1,4 @@
+# -*- perl -*-
 use Config;
 use File::Basename qw(&basename &dirname);
 # This forces PL files to create target in same directory as PL file.
@@ -50,9 +51,10 @@ print OUT <<'!NO!SUBS!';
 require 5.004;
 use Carp ();
 use strict;      # Enable for testing only, disable for distributions
-                 # users won't like this for eval's
+# users won't like this for eval's
 use DBI ();
 use Term::ReadLine ();
+use Data::ShowTable ();
 
 
 ############################################################################
@@ -62,8 +64,9 @@ use Term::ReadLine ();
 my $VERSION = sprintf("%d.%02d%02d%02d",
 		      split(/\./, substr(q$Revision: 1.1804.1.1 $, 10)));
 
-my @VALID_VARS = ("fancyOutput", "less", "maxColumnLength", "maxRows",
-		  "escapeChar", "quoteChar", "sepChar");
+my @VALID_VARS = ("escapeChar", "less", "listWrapMargin", "maxTableWidth",
+		  "noEscape", "quoteChar", "sepChar", "showMode");
+	
 
 ############################################################################
 #
@@ -73,8 +76,6 @@ my @VALID_VARS = ("fancyOutput", "less", "maxColumnLength", "maxRows",
 my $term = undef;
 my $prompt = "dbimon> ";
 my $batchMode = 0;
-my $fancyOutput = 1;
-my $less;
 my $debugging = 0;
 
 my $driver;
@@ -82,13 +83,17 @@ my $dbh;
 my $dsn;
 my $user;
 my $password;
+my $attribs;
 
 # Variables that may be modified via the 'set' command
-my $maxColumnLength = 1024;
-my $maxRows         = 100;
 my $escapeChar      = '"';
+my $less            = '';
+my $listWrapMargin  = $Data::ShowTable::List_Wrap_Margin;
+my $maxTableWidth   = $Data::ShowTable::Max_Table_Width;
+my $noEscape        = 0;
 my $quoteChar       = '"';
 my $sepChar         = ';';
+my $showMode        = $Data::ShowTable::Show_Mode;
 
 
 ############################################################################
@@ -132,7 +137,7 @@ sub FindExe ($$) {
 #
 ############################################################################
 
-sub Connect ($;$$) {
+sub Connect (@) {
     my ($ndsn, $nuser, $npassword) = @_;
     my ($dbh);
 
@@ -195,16 +200,23 @@ sub Connect ($;$$) {
 
 sub Output ($) {
     my ($sth) = @_;
-    my $numTruncated = 0;
+    my $restoreStdout = 0;
 
-    if (!open(OUT, (!$batchMode  &&  $less ne 'stdout'  &&  $less ne '') ?
-	           "| $less" : ">&STDOUT")) {
-#
-	print STDERR "Cannot open output channel: $!\n";
-	return;
+    if (!$batchMode  &&  $less  &&  $less ne 'stdout') {
+	if (!open(SAVEOUT, ">&STDOUT")) {
+	    print STDERR "Cannot redirect STDOUT: $!\n";
+	    return;
+	}
+	if (!open(STDOUT, "| $less")) {
+	    print STDERR "Cannot open pipe to pager $less: $!\n";
+	    open(STDOUT, ">&SAVEOUT");
+	    close(SAVEOUT);
+	    return;
+	}
+	$restoreStdout = 1;
     }
 
-    if (!$fancyOutput) {
+    if (!$showMode eq 'Export') {
 	# Output for export is somewhat simpler ...
 	my(@res);
 	my($ePattern, $qPattern, $null, $ref, $quote);
@@ -238,178 +250,34 @@ sub Output ($) {
 		if ($ePattern) {
 		    $word =~ s/($ePattern)/$escapeChar$1/g;
 		}
-		printf OUT ("%s%s%s%s", $quote, $word, $quote, $add);
+		printf ("%s%s%s%s", $quote, $word, $quote, $add);
 		$add = $sepChar;
 	    }
 	}
     } else {
-	# Here's the really hard part: Fancy output.
-	#
-	# The most difficult problem is to decide about the field
-	# length of a given column.
-	my (@lengths);
-	my ($i, $numFields, $choosedFields);
-	my (@rowBuffer, $lastRowSeen, $ref);
-
-	$numFields = $sth->{'NUM_OF_FIELDS'};
-	$choosedFields = 0;
-
-
-	# First try asking the driver.
-	if ($choosedFields < $numFields  &&
-	    defined($ref = $sth->{'format_default_size'})) {
-	    @lengths = @$ref;
-	    for ($i = 0;  $i < $numFields;  $i++) {
-		if (defined($lengths[$i] = $$ref[$i])) {
-		    $choosedFields++;
-		}
-	    }
-	}
-
-
-	# The driver gave us no idea.
-	# Heuristically we fetch the first $maxRows rows and count the
-	# maximum field length.
-	$lastRowSeen = 0;
-	if ($choosedFields < $numFields) {
-	    my ($j, @maxLengths);
-	    for ($j = 0;  $j < $maxRows;  $j++) {
-		if (!($ref = $sth->fetchrow_arrayref)) {
-		    $lastRowSeen = 1;
-		    last;
-		}
-		push(@rowBuffer, [@$ref]);
-		for ($i = 0;  $i < $numFields;  $i++) {
-		    if (!defined($$ref[$i])) {
-			$$ref[$i] = 'NULL';
-                    }
-		    if (!defined($lengths[$i])) {
-			my $len = defined($$ref[$i]) ? length($$ref[$i]) : 0;
-			if (!defined($maxLengths[$i])  ||
-			    $maxLengths[$i] < $len) {
-			    $maxLengths[$i] = $len;
-			}
-		    }
-		}
-	    }
-	    for ($i = 0;  $i < $numFields;  $i++) {
-		if (!defined($lengths[$i])  &&
-		    defined($maxLengths[$i])) {
-		    $lengths[$i] = $maxLengths[$i];
-		}
-	    }
-	}
-
-	# For columns that are still open: Ask the driver for
-	# maximum possible size.
-	if ($choosedFields < $numFields  &&
-	    defined($ref = $sth->{'format_max_size'})) {
-	    for ($i = 0;  $i < $numFields;  $i++) {
-		if (defined($$ref[$i])  &&  ($$ref[$i] != -1)  &&
-		    !defined($lengths[$i])) {
-		    $$ref[$i] = $lengths[$i];
-		    ++$choosedFields;
-		}
-	    }
-	}
-
-
-	# Final criterion for column length: The column name
-	my $names;
-	if (defined($names = $sth->{'NAME'})) {
-	    for ($i = 0;  $i < $numFields;  $i++) {
-		if (defined($$names[$i])  &&
-		    (!defined($lengths[$i])  ||
-		     length($$names[$i]) > $lengths[$i])) {
-		    $lengths[$i] = length($$names[$i]);
-		}
-	    }
-	}
-
-	# Determine the order of printing columns. This will usually
-	# be 0, 1, 2, etc. If there are still any rows without length
-	# information, put them at the end
-	my(@aRows, @bRows);
-	for ($i = 0;  $i < $numFields;  $i++) {
-	    if (!defined($lengths[$i])) {
-		$lengths[$i] = 0; # Note, that $lengths[$i] is an integer now
-		push(@bRows, $i);
-	    } elsif ($lengths[$i] == 0) {
-		push(@bRows, $i);
-	    } else {
-		push(@aRows, $i);
-	    }
-	    if ($maxColumnLength  &&  ($lengths[$i] > $maxColumnLength)) {
-		$lengths[$i] = $maxColumnLength;
-	    }
-	}
-	push(@aRows, @bRows);
-
-	# Create a header line in the format ---|--|-----
-	my ($header, $add, $empty);
-	foreach $i (@aRows) {
-	    $header .= "|" . "-" x $lengths[$i];
-	}
-	$header .= "|\n";
-
-	# Print table header
-	print OUT ($header);
-	foreach $i (@aRows) {
-	    my $format = sprintf("|%%-%ds", $lengths[$i]);
-	    my $name = defined($$names[$i]) ? $$names[$i] : "";
-	    if (length($name) > $lengths[$i]) {
-		$name = substr(0, $lengths[$i]);
-	    }
-	    printf OUT ($format, $name);
-	}
-	printf OUT ("|\n%s", $header);
-
-	# Now create a format string for printing the real data
-	my $format = "";
-	my $types = $sth->{'format_right_justify'};
-	foreach $i (@aRows) {
-	    my $len = $lengths[$i];
-	    if ($len > $maxColumnLength) {
-		$len = $maxColumnLength;
-	    }
-	    if (defined($$types[$i])  &&  $$types[$i]) {
-		$format .= sprintf("|%%-%ds", $len);
-	    } else {
-		$format .= sprintf("|%%%ds", $len);
-	    }
-	}
-	$format .= "|\n";
-
-	# Believe it or not: Here comes the true print ...
-	#
-	# Note that we do not fetch another row if $lastRowSeen = 1.
-	# The DBI specification would allow us, but let´s be cautious ...
-	while (defined($ref = shift @rowBuffer)  ||
-	       !$lastRowSeen  &&  defined($ref = $sth->fetchrow_arrayref)) {
-	    my ($col, @row);
-	    @row = ();
-	    foreach $i (@aRows) {
-		my $len = $lengths[$i];
-		my $col = $$ref[$i];
-		if (!defined($col)) {
-		    $col = 'NULL';
-		} elsif (length($col) > $len) {
-		    $col = substr($col, 0, $len);
-		    $numTruncated++;
-		}
-		push(@row, $col);
-	    }
-	    printf OUT ($format, @row);
-	}
-	print OUT ($header);
+	my $row_sub = sub ($) {
+	    $_[0] ? 0 : $sth->fetchrow_array;
+	};
+	my ($numFields, $titles, $types, $widths);
+	eval {
+	    $titles = $sth->{'NAME'} || [];
+	    $types = $sth->{'format_type_name'} || \('char' x $numFields);
+	    $widths = $sth->{'format_default_size'} || [];
+	};
+        Data::ShowTable::ShowTable { 'titles' => $titles,
+				     'widths' => $widths,
+				     'types' => $types,
+				     'row_sub' => $row_sub,
+				     'show_mode' => $showMode,
+				     'wrap_margin' => $listWrapMargin,
+				     'max_width' => $maxTableWidth,
+				     'no_escape' => $noEscape
+				   };
     }
 
-    close(OUT);
-
-    if ($numTruncated) {
-	print "Warning: $numTruncated columns have been truncated.\n";
-	print "You might suppress truncation by increasing maxColumnLength\n";
-	print "or disable truncation by setting maxColumnLength = 0.\n";
+    if ($restoreStdout) {
+	open(STDOUT, ">&SAVEOUT");
+	close(SAVEOUT);
     }
 }
 
@@ -429,25 +297,17 @@ sub Output ($) {
 #
 ############################################################################
 
-sub DisplayList ($$) {
-    my ($header, $l) = @_;
+sub DisplayList ($$) {        # XXX Replace this with ShowDatabases() and
+    my ($header, $l) = @_;    # ShowTables() as soon as they work. :-(
 
-    my $len = length($header);
-    my $dsn;
-    foreach $dsn (@$l) {
-	if (length($dsn) > $len) {
-	    $len = length($dsn);
-	}
-    }
-    my $format = sprintf("|  %%-%ds  |\n", $len);
-    my $bar = "+--" . ("-" x $len) . "--+\n";
-    print $bar;
-    printf($format, $header);
-    print $bar;
-    foreach $dsn (@$l) {
-	printf($format, $dsn);
-    }
-    print $bar;
+    local( $::current_row ) = 0;
+    my $row_sub	= sub {
+	&Data::ShowTable::ShowRow($_[0], \$::current_row, $l);
+    };
+    Data::ShowTable::ShowTable {'titles' => [$header],
+				'types' => ['char'],
+				'widths' => [ ],
+				'row_sub' => $row_sub};
 }
 
 sub DsnList() {
@@ -525,7 +385,7 @@ sub RelShow (;$$) {
 	    } elsif (!@l) {
 		print "No databases found.\n";
 	    } else {
-		DisplayList("DSN list", \@l);
+	      DisplayList('DSN list', \@l);
 	    }
 	}
 	return;
@@ -561,65 +421,63 @@ sub RelShow (;$$) {
 					       length("Not Null"));
 	    my ($numFields, $fRef, $tRef, $lRef, $nRef);
 	    eval {
+		my $ref;
 		$numFields = $sth->{'NUM_OF_FIELDS'};
-		$fRef = [@{$sth->{'NAME'}}];
-		$nRef = [@{$sth->{'NULLABLE'}}];
-		$tRef = [@{$sth->{'format_type_name'}}];
-		$lRef = [@{$sth->{'length'}}];
+		if (defined($ref = $sth->{'NAME'})  &&  ref($ref) eq 'ARRAY') {
+		    $fRef = [@$ref];
+		}
+		if (defined($ref = $sth->{'NULLABLE'})  &&
+		    ref($ref) eq 'ARRAY') {
+		    $nRef = [@$ref];
+		}
+		if (defined($ref = $sth->{'format_type_name'})  &&
+		    ref($ref) eq 'ARRAY') {
+		    $tRef = [@$ref];
+		}
+		if (defined($ref = $sth->{'format_max_size'})  &&
+		    ref($ref) eq 'ARRAY') {
+		    $lRef = [@$ref];
+		}
 	    };
-	    if (ref($fRef) ne 'ARRAY') { $fRef = []; };
-	    if (ref($nRef) ne 'ARRAY') { $nRef = []; };
-	    if (ref($tRef) ne 'ARRAY') { $tRef = []; };
-	    if (ref($lRef) ne 'ARRAY') { $lRef = []; };
-	    
-	    my $i;
-	    for ($i = 0;  $i < $numFields;  $i++) {
-		if (!defined($$fRef[$i])) {
-		    $$fRef[$i] = "unknown";
+	    my $col_num = 0;
+
+	    my $row_sub = sub ($) {
+		my ($name, $type, $len, $nullable);
+		if (shift) {
+		    $col_num = 0;
+		    return 1;
 		}
-		if ($fLen < length($$fRef[$i])) {
-		    $fLen = length($$fRef[$i]);
+		if ($col_num >= $numFields) {
+		    return ();
 		}
-		if (!defined($$tRef[$i])) {
-		    $$tRef[$i] = "unknown";
+		if (!$fRef  ||  (ref($fRef) ne 'ARRAY')  ||
+		    !defined($name = $$fRef[$col_num])) {
+		    $name = "unknown";
 		}
-		if ($tLen < length($$tRef[$i])) {
-		    $tLen = length($$tRef[$i]);
+		if (!$tRef  ||  (ref($tRef) ne 'ARRAY')  ||
+		    !defined($type = $$tRef[$col_num])) {
+		    $name = "unknown";
 		}
-		if (!defined($$lRef[$i])) {
-		    $$lRef[$i] = "N/A";
+		if (!$lRef  ||  (ref($lRef) ne 'ARRAY')  ||
+		    !defined($len = $$lRef[$col_num])) {
+		    $len = "N/A";
 		}
-		if ($lLen < length($$lRef[$i])) {
-		    $lLen = length($$lRef[$i]);
-		}
-		if (!defined($$nRef[$i])) {
-		    $$nRef[$i] = "  N/A   ";
+		if (!$nRef  ||  (ref($nRef) ne 'ARRAY')  ||
+		    !defined($nullable = $$nRef[$col_num])) {
+		    $len = "N/A";
 		} else {
-		    $$nRef[$i] = $$nRef[$i] ? "    N   " : "    Y   ";
+		    $nullable = $nullable ? "Y" : "N";
 		}
-		if ($nLen < length($$nRef[$i])) {
-		    $nLen = length($$nRef[$i]);
-		}
-	    }
-	
-	    if ($numFields == 0) {
-		print "No fields found ?!?\n";
-	    } else {
-		my $format = sprintf("| %%-%ds | %%-%ds | %%%ds | %%%ds |\n",
-				     $fLen, $tLen, $lLen, $nLen);
-		my $bar = "+-" . ("-" x $fLen) . "-+-" . ("-" x $tLen)
-		    . "-+-" . ("-" x $lLen) . "-+-" . ("-" x $nLen) . "-+\n";
-		print $bar;
-		printf($format, "Field", "Type", "Length", "Not Null");
-		print $bar;
-		my $i;
-		for ($i = 0;  $i < $numFields;  $i++) {
-		    printf($format, $$fRef[$i], $$tRef[$i], $$lRef[$i],
-			   $$nRef[$i]);
-		}
-		print $bar;
-	    }
-	    undef $sth;
+		$col_num++;
+		($name, $type, $len, $nullable);
+	    };
+
+	    Data::ShowTable::ShowTable {'titles' => ['Field', 'Type',
+						     'Length', 'Nullable'],
+					'types' =>  ['char', 'char', 'int',
+						     'char'],
+					'widths' => [],
+					'row_sub' => $row_sub};
 	}
     }
 
@@ -638,34 +496,30 @@ sub RelShow (;$$) {
 #   Inputs:  $key - variable name
 #            $val - variable value; optional; variable will only be
 #                queried, if $val is undef
+#            $complete - if TRUE, this parameter asks for completion
+#                of $val
 #
 #   Returns: List with variable name and current (probably modified)
 #            value. $key is undef, if variable name was invalid.
 #
 ############################################################################
 
-sub GetOrSetVal ($;$) {
-    my ($key, $val) = @_;
+sub GetOrSetVal (@) {
+    my ($key, $val, $complete) = @_;
 
     if ($key =~ /^e(s(c(a(p(e(c(h(ar?)?)?)?)?)?)?)?)?$/i) {
+	if ($complete) {
+	    return (); # No completion available
+	}
 	if (defined($val)) {
 	    $escapeChar = $val;
 	}
 	$val = $escapeChar ? $escapeChar : "off";
 	$key = "escapeChar";
-    } elsif ($key =~ /^f(a(n(c(y(o(u(t(p(ut?)?)?)?)?)?)?)?)?)?$/i) {
-	if (defined($val)) {
-	    if ($val =~ /^on$/i) {
-		$fancyOutput = 1;
-	    } elsif ($val =~ /^off?$/i) {
-		$fancyOutput = 0;
-	    } else {
-		$fancyOutput = $val ? 1 : 0;
-	    }
+    } elsif ($key =~ /^le(ss?)?$/i) {
+	if ($complete) {
+	    return (); # No completion available
 	}
-	$val = $fancyOutput ? "on" : "off";
-	$key = "fancyOutput";
-    } elsif ($key =~ /^l(e(ss?)?)?$/i) {
 	if (defined($val)) {
 	    if ($val  &&  $val ne 'stdout'  &&  ! -x $val) {
 		print "No such executable: $val\n";
@@ -676,45 +530,120 @@ sub GetOrSetVal ($;$) {
 	}
 	$val = ($less && $less ne 'stdout') ? $less : "off";
 	$key = "less";
-    } elsif ($key =~ /^maxc(o(l(u(m(n(l(e(n(g(th?)?)?)?)?)?)?)?)?)?)?$/i) {
+    } elsif ($key =~ /^li(s(t(w(r(a(p(m(a(r(g(in?)?)?)?)?)?)?)?)?)?)?)?$/i) {
+	if ($complete) {
+	    return (); # No completion available
+	}
 	if (defined($val)) {
 	    if ($val =~ /^\d+$/) {
-		$maxColumnLength = $val;
+		$listWrapMargin = $val;
 	    } elsif ($val eq "off") {
-		$maxColumnLength = 0;
+		$maxTableWidth = '';
 	    } else {
-		print "Illegal value for maxColumnLength: $val\n";
+		print "Illegal value for maxTableWidth: $val\n";
 		print "Keeping old value.\n";
 	    }
 	}
-	$val = $maxColumnLength ? $maxColumnLength : "off";
-	$key = "maxColumnLength";
-    } elsif ($key =~ /^maxr(o(ws?)?)?$/i) {
+	$val = ($maxTableWidth ne '') ? $maxTableWidth : "off";
+	$key = "maxTableWidth";
+    } elsif ($key =~ /^maxt(a(b(l(e(w(i(d(th?)?)?)?)?)?)?)?)?$/i) {
+	if ($complete) {
+	    return (); # No completion available
+	}
 	if (defined($val)) {
 	    if ($val =~ /^\d+$/) {
-		$maxRows = $val;
+		$maxTableWidth = $val;
 	    } elsif ($val eq "off") {
-		$maxRows = 0;
+		$maxTableWidth = '';
 	    } else {
-		print "Illegal value for maxRows: $val\n";
+		print "Illegal value for maxTableWidth: $val\n";
 		print "Keeping old value.\n";
 	    }
 	}
-	$val = $maxRows ? $maxRows : "off";
-	$key = "maxRows";
-    } elsif ($key =~ /q(u(o(t(e(c(h(ar?)?)?)?)?)?)?)?/) {
+	$val = ($maxTableWidth ne '') ? $maxTableWidth : "off";
+	$key = "maxTableWidth";
+    } elsif ($key =~ /n(o(e(s(c(a(pe?)?)?)?)?)?)?$/i) {
+	if ($complete) {
+	    if ($val =~ /^on$/i) {
+		return ('on');
+	    } elsif ($val =~ /^off?$/i) {
+		return ('off');
+	    } elsif ($val =~ /^o?$/i) {
+		return ('on', 'off');
+	    } else {
+		return ();
+	    }
+	}
+	if (defined($val)) {
+	    if ($val =~ /^on$/i) {
+		$noEscape = 1;
+	    } elsif ($val =~ /^off?$/i) {
+		$noEscape = 0;
+	    } else {
+		print "Unknown value, use either 'on' or 'off'.\n";
+		print "Keeping old value.\n";
+	    }
+	}
+	$val = $noEscape ? 'on' : 'off';
+    } elsif ($key =~ /q(u(o(t(e(c(h(ar?)?)?)?)?)?)?)?/i) {
+	if ($complete) {
+	    return (); # No completion available
+	}
 	if (defined($val)) {
 	    $quoteChar = $val;
 	}
 	$val = $quoteChar ? $quoteChar : "off";
 	$key = "quoteChar";
-    } elsif ($key =~ /s(e(p(c(h(ar?)?)?)?)?)?/i) {
+    } elsif ($key =~ /se(p(c(h(ar?)?)?)?)?/i) {
+	if ($complete) {
+	    return (); # No completion available
+	}
 	if (defined($val)) {
 	    $sepChar = $val;
 	}
 	$val = $sepChar ? $sepChar : "off";
 	$key = "sepChar";
+    } elsif ($key =~ /^sh(o(w(m(o(de?)?)?)?)?)?$/i) {
+	if ($complete) {
+	    if ($val =~ /^b(ox?)?$/i) {
+		return ('Box');
+	    } elsif ($val =~ /^e(x(p(o(rt?)?)?)?)?$/i) {
+		return ('Export');
+	    } elsif ($val =~ /^h(t(ml?)?)?$/i) {
+		return ('HTML');
+	    } elsif ($val =~ /^l(i(st?)?)?$/i) {
+		return ('List');
+	    } elsif ($val =~ /^t(a(b(le?)?)?)?$/i) {
+		return ('List');
+	    } elsif ($val eq '') {
+		return ('Box', 'Export', 'HTML', 'List', 'Table');
+	    } else {
+		return ();
+	    }
+	}
+	if (defined($val)) {
+	    if ($val =~ /^b(ox?)?$/i) {
+		$showMode = 'Box';
+	    } elsif ($val =~ /^t(a(b(le?)?)?)?$/i) {
+		$showMode = 'Table';
+	    } elsif ($val =~ /^l(i(st?)?)?$/i) {
+		$showMode = 'List';
+	    } elsif ($val =~ /^h(t(ml?)?)?$/i) {
+		$showMode = 'HTML';
+	    } elsif ($val =~ /^e(x(p(o(rt?)?)?)?)?$/i) {
+		$showMode = 'Export';
+	    } else {
+		print "Unknown show mode: $val\n";
+		print "Possible modes are: Box, Table, List, HTML, Export\n";
+		print "Keeping old value.\n";
+	    }
+	}
+	$val = $showMode;
+	$key = "showMode";
     } else {
+	if ($complete) {
+	    return ();
+	}
 	$key = undef;
     }
 
@@ -738,15 +667,29 @@ sub Set (@) {
     if (!@_) {
 	# Display complete list of arguments
 	printf("Current settings:\n" .
-	       "         fancyOutput: %s\n", (GetOrSetVal("fancyOutput"))[1]);
-	if ($fancyOutput) {
-	    my @keys = @VALID_VARS;
-	    my $key;
-	    shift @keys; # 'fancy' already printed
-
-	    foreach $key (@keys) {
-		printf("     %15s: %s\n", $key, (GetOrSetVal($key))[1]);
-	    }
+	       "                less: %s\n" .
+	       "            showMode: %s\n",
+	       (GetOrSetVal("less"))[1], (GetOrSetVal("showMode"))[1]);
+        if ($showMode eq 'Export') {
+	    printf("          escapeChar: %s\n" .
+		   "           quoteChar: %s\n" .
+		   "             sepChar: %s\n",
+		   (GetOrSetVal("escapeChar"))[1],
+		   (GetOrSetVal("quoteChar"))[1],
+		   (GetOrSetVal("sepChar"))[1]);
+	} elsif ($showMode eq 'Box') {
+	    printf("       maxTableWidth: %s\n",
+		   (GetOrSetVal("maxTableWidth"))[1]);
+	} elsif ($showMode eq 'HTML') {
+	    printf("       maxTableWidth: %s\n" .
+		   "            noEscape: %s\n",
+		   (GetOrSetVal("maxTableWidth"))[1],
+		   (GetOrSetVal("noEscape"))[1]);
+	} elsif ($showMode eq 'List') {
+	    printf("      listWrapMargin: %s\n" .
+		   "       maxTableWidth: %s\n",
+		   (GetOrSetVal("listWrapMargin"))[1],
+		   (GetOrSetVal("maxTableWidth"))[1]);
 	}
     } elsif (@_ == 1  ||  @_ == 2) {
 	my($key, $val) = @_;
@@ -837,12 +780,16 @@ sub complete_for_set ($$) {
     my @t = split(' ', $line);
     if (@t == 1  ||  @t == 2  &&  $word eq $t[1]) {
 	grep /^\Q$word/, @VALID_VARS;
+    } elsif ((@t == 2 && $word eq '') ||  @t == 3  &&  $word eq $t[2]) {
+	my ($key) = $t[1]  ||  '';
+	my ($val) = $t[2]  ||  '';
+	GetOrSetVal($t[1], $t[2], 1);
     } else {
 	();
     }
 }
 
-sub Complete () {
+sub Complete ($$$) {
     my($word, $line, $pos) = @_;
     $word ||= '';
     $line ||= '';
@@ -876,9 +823,11 @@ sub Complete () {
     }
 }
 
-sub CompleteGnu (@) {
-    my(@poss) = Complete(@_);
-    $term->Attribs->{'completion_word'} = \@poss;
+sub CompleteGnu ($$$) {
+    my($word, $line, $pos) = @_;
+    my(@poss) = Complete($word, $line, $pos);
+    $attribs->{'completion_word'} = \@poss;
+    return;
 }
 
 
@@ -1011,7 +960,7 @@ dbimon $VERSION Copyright (C) 1997 Jochen Wiedmann
 	my ($rl_package) = $term->ReadLine;
 	my ($rl_avail);
 	if ($rl_package eq "Term::ReadLine::Gnu") {
-	    my $attribs = $term->Attribs;
+	    $attribs = $term->Attribs;
 	    $attribs->{'attempted_completion_function'} = \&CompleteGnu;
 	    $attribs->{'completion_entry_function'} =
 		$attribs->{'list_completion_function'};
@@ -1023,7 +972,8 @@ dbimon $VERSION Copyright (C) 1997 Jochen Wiedmann
 		$rl_avail = 'enabled';
 	    } else {
 		$rl_avail = "available (get Term::ReadKey and"
-		  . " Term::ReadLine::[Perl|GNU])";
+		    . " Term::ReadLine::[Perl|GNU])";
+	    }
 	}
 
 	my $serverinfo = eval { $dbh->func('getserverinfo'); };
@@ -1039,14 +989,14 @@ dbimon $VERSION Copyright (C) 1997 Jochen Wiedmann
     # Main loop
     my $line;
     while ($batchMode ? defined($line = <STDIN>) :
-	                defined($line = $term->readline("dbimon> "))) {
+	   defined($line = $term->readline("dbimon> "))) {
 	# Remove preceding and trailing blanks, ignore empty lines
 	$line =~ s/^\s+//;
 	$line =~ s/\s+$//;
 	if ($line =~ /^$/) {
 	    next;
 	}
-
+	
 	# Handle Perl evaluation
 	if ($line =~ /^\!/) {
 	    my $command = $';
@@ -1065,19 +1015,19 @@ dbimon $VERSION Copyright (C) 1997 Jochen Wiedmann
 	    }
 	    next;
 	}
-
+	
 	# Help mode
 	if ($line =~ /^\?/) {
 	    Help();
 	    next;
 	}
-
+	
 	# Perhaps this is a command?
 	my ($command, @args) = split(' ', $line);
 	if (!defined($command)) {
 	    next;
 	}
-
+	
 	if ($command =~ /^d(sn?)?$/i) {
 	    if (@args) {
 		my $ndbh;
@@ -1086,6 +1036,7 @@ dbimon $VERSION Copyright (C) 1997 Jochen Wiedmann
 		} else {
 		    $dbh->disconnect;
 		    $dbh = $ndbh;
+		    $dsn = $args[0];
 		}
 	    }
 	    print "Current DSN is: $dsn\n";
@@ -1167,7 +1118,7 @@ almost identical to pmsql, in particular the following holds:
 
 The output is formatted much in the same way as by the msql or mysql
 monitor (see below), the msqlexport command and the relshow (mysqlshow)
-program, which are coming with msql or mysql.
+programs, which are coming with msql or mysql.
 
 =item *
 
@@ -1231,33 +1182,28 @@ are:
 
 =over 4
 
-=item fancyOutput
+=item showMode
 
-This variable controls the look of SQL results. By default dbimon
-creates fancy, formatted output with table borders. The alternative
-is an output format which is well suited for exporting data to
-other database systems.
+This variable controls the output of an SQL result table. Possible values
+are C<Box>, C<Export>, C<List>, C<Table> and C<HTML>. These correspond
+to modes of the I<Data::ShowTable> module with the exception of C<Export>:
+This is handled by dbimon internally, as I<Data::ShowTable> doesn't
+offer such a mode. The C<Export> mode is well suited for exporting data to
+other database systems. See L<Data::ShowTable(3)>.
 
 =item less
 
 This is the pager variable. You can turn off paging by setting this
 to 'stdout'.
 
-=item maxColumnLength
+=item listWrapMargin
 
-=item maxRows
+=item maxTableWidth
 
-If the DBI driver does not offer information about the column sizes
-of a query result, dbimon will try to find these out. The first
-I<maxRows> columns will be fetched and the output will be formatted
-according to the maximum column sizes that dbimon found so far.
-Columns will be truncated if they exceed I<maxColumnLength> characters.
+=item noEscape
 
-If you want dbimon to use the complete result for determining maximum
-column sizes, you can set I<maxRows> to 0. (Default are 100 rows.)
-Likewise you can disable truncation by setting I<maxColumnLength> to
-0. (Default are 1024 characters.)
-
+These correspond to the variables C<$List_Wrap_Margin>, C<$Max_Table_Width>
+and C<$No_Escape> of the I<Data::ShowTable> module. See L<Data::ShowTable(3)>.
 
 =item escapeChar
 
@@ -1265,7 +1211,7 @@ Likewise you can disable truncation by setting I<maxColumnLength> to
 
 =item sepChar
 
-For non-fancy output dbimon will use these variables. Columns are
+For C<Export> mode dbimon will use these variables. Columns are
 surrounded by the I<quoteChar>, separated by the I<sepChar> and
 the I<escapeChar> is used for inserting these special characters.
 The defaults are well suited for Excel (I<escapeChar> = C<">,
@@ -1299,10 +1245,10 @@ have here.
 dbimon should in theory work with any DBI driver. However, DBI is too
 restricted for really comfortable work. Thus I decided to use some
 very basic possibilities of the DBD::mSQL and DBD::mysql drivers. It
-should be easy to add these to any driver.
-
-Anyways, all uses of the private methods is surrounded by eval's,
-thus most things should work. And the program is still usable.
+should be easy to add these to any driver and dbimon doesn't depend
+on them: All requests for these variables are braced with eval's so
+that dbimon can either insert defaults or refuse to execute the
+respective commands.
 
 I'll be happy to drop these additional requirements as soon as the
 DBI gets extended in an appropriate way and adopt my sources, but
@@ -1328,6 +1274,9 @@ the complete result in memory, so I could easily add the attribute
 by scanning all rows. (Perhaps faster than relying on dbimons builtin
 possibility.)
 
+The array ref is passed to I<Data::ShowTable::ShowTable> as the
+I<widths> attribute.
+
 =item format_max_size
 
 Similar to I<format_default_size>, but this is the theoretical maximum
@@ -1335,18 +1284,16 @@ size. Again, the driver is free not to implement this attribute or
 implement it for certain columns only, but he must supply C<undef>
 for all other columns.
 
-=item format_right_justify
-
-Again, a statement handles attribute, reference to an array. It tells
-dbimon what kind of justification to use for a column. DBD::mSQL and
-DBD::mysql simply map this to IS_NUM. The driver should implement
-this attribute.
+These values are displayed in the C<relshow database tables> command.
 
 =item format_type_name
 
 Reference to an array of type names; for example DBD::mSQL will insert
 the type name C<int> for a column of type I<INT_TYPE>. The driver
 should implement this attribute.
+
+This array is passed to I<Data::ShowTable::ShowTable> as the I<types>
+argument.
 
 =item C<@list = $dbh-E<gt>func("_ListTables")>
 
@@ -1357,10 +1304,9 @@ Lists the tables of the dsn corresponding to I<$dbh>.
 Returns a statement handle describing the fields of a table. This could,
 for example, be implemented by a
 
-  SELECT * FROM table WHERE column <> column
+  SELECT * FROM table WHERE 0 <> 1
 
-if you only know a column name. (Of course I can imagine better
-solutions ... :-)
+(Of course I can imagine better solutions ... :-)
 
 =back
 

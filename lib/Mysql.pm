@@ -8,9 +8,9 @@ require Mysql::Statement;
 $QUIET  = $QUIET  = '';
 @ISA    = @ISA    = '';
 @EXPORT = @EXPORT = '';
-$VERSION = $VERSION = "1.1806";
+$VERSION = $VERSION = "1.1809";
 
-# $Revision: 1.1806 $$Date: 1997/09/03 22:39:55 $$RCSfile: Mysql.pm,v $
+# $Revision: 1.1809 $$Date: 1997/09/12 18:34:34 $$RCSfile: Mysql.pm,v $
 
 $QUIET = 0;
 
@@ -59,8 +59,8 @@ sub AUTOLOAD {
     my $meth = $AUTOLOAD;
     my $converted = 0;
 
-    if ($meth =~ /(.*)::/) {
-	$meth = $';
+    if ($meth =~ /(.*)::(.*)/) {
+	$meth = $2;
 	$class = $1;
     } else {
 	$class = "main";

@@ -21,12 +21,13 @@
  *           Fax: +49 7123 / 14892
  *
  *
- *  $Id: dbdimp.h,v 1.1806 1997/09/03 22:39:05 joe Exp $
+ *  $Id: dbdimp.h,v 1.1809 1997/09/12 18:34:09 joe Exp $
  */
 
 /*
  *  Header files we use
  */
+#define NEED_DBIXS_VERSION 9
 #include <DBIXS.h>  /* installed by the DBI module                        */
 #include "myMsql.h"
 
@@ -174,30 +175,55 @@ struct imp_sth_st {
 
 /*
  *  And last, not least: The prototype definitions.
- */
-void     dbd_init _((dbistate_t *dbistate));
+ *
+ * These defines avoid name clashes for multiple statically linked DBD's	*/
+#ifdef DBD_MYSQL
+#define dbd_init		mysql_init
+#define dbd_db_login		mysql_db_login
+#define dbd_db_do		mysql_db_do
+#define dbd_db_commit		mysql_db_commit
+#define dbd_db_rollback		mysql_db_rollback
+#define dbd_db_disconnect	mysql_db_disconnect
+#define dbd_db_destroy		mysql_db_destroy
+#define dbd_db_STORE_attrib	mysql_db_STORE_attrib
+#define dbd_db_FETCH_attrib	mysql_db_FETCH_attrib
+#define dbd_st_prepare		mysql_st_prepare
+#define dbd_st_rows		mysql_st_rows
+#define dbd_st_execute		mysql_st_execute
+#define dbd_st_fetch		mysql_st_fetch
+#define dbd_st_finish		mysql_st_finish
+#define dbd_st_destroy		mysql_st_destroy
+#define dbd_st_blob_read	mysql_st_blob_read
+#define dbd_st_STORE_attrib	mysql_st_STORE_attrib
+#define dbd_st_FETCH_attrib	mysql_st_FETCH_attrib
+#define dbd_describe		mysql_describe
+#define dbd_bind_ph		mysql_bind_ph
+#else
+#define dbd_init		msql_init
+#define dbd_db_login		msql_db_login
+#define dbd_db_do		msql_db_do
+#define dbd_db_commit		msql_db_commit
+#define dbd_db_rollback		msql_db_rollback
+#define dbd_db_disconnect	msql_db_disconnect
+#define dbd_db_destroy		msql_db_destroy
+#define dbd_db_STORE_attrib	msql_db_STORE_attrib
+#define dbd_db_FETCH_attrib	msql_db_FETCH_attrib
+#define dbd_st_prepare		msql_st_prepare
+#define dbd_st_rows		msql_st_rows
+#define dbd_st_execute		msql_st_execute
+#define dbd_st_fetch		msql_st_fetch
+#define dbd_st_finish		msql_st_finish
+#define dbd_st_destroy		msql_st_destroy
+#define dbd_st_blob_read	msql_st_blob_read
+#define dbd_st_STORE_attrib	msql_st_STORE_attrib
+#define dbd_st_FETCH_attrib	msql_st_FETCH_attrib
+#define dbd_describe		msql_describe
+#define dbd_bind_ph		msql_bind_ph
+#endif
+
+#include <dbd_xsh.h>
 void	 do_error _((SV* h, int rc, char *what));
-int     dbd_db_login _((SV *dbh, char *dbname, char *uid, char *pwd));
-int     dbd_db_commit _((SV *dbh));
-int     dbd_db_rollback _((SV *dbh));
-int     dbd_db_disconnect _((SV *dbh));
-void    dbd_db_destroy _((SV *dbh));
-int     dbd_db_STORE_attrib _((SV *dbh, SV *keysv, SV *valuesv));
-SV      *dbd_db_FETCH_attrib _((SV *dbh, SV *keysv));
 SV	*dbd_db_fieldlist _((result_t res));
 
-int     dbd_st_prepare _((SV *sth, char *statement, SV *attribs));
-int     dbd_st_finish _((SV *sth));
-void    dbd_st_destroy _((SV *sth));
-int     dbd_st_STORE_attrib _((SV *sth, SV *keysv, SV *valuesv));
-SV      *dbd_st_FETCH_attrib _((SV *sth, SV *keysv));
-
 void    dbd_preparse _((imp_sth_t *imp_sth, SV *statement));
-int     dbd_describe _((SV *h, imp_sth_t* sth));
-AV      *dbd_st_fetch _((SV *h));
-int     dbd_st_rows _((SV *h));
-int     dbd_st_execute _((SV* h));
 
-int dbd_bind_ph _((SV *sth, SV *param, SV *value, SV *attribs, int a, int b));
-int dbd_st_blob_read _((SV *sth, int field, long offset, long len,
-			SV *destrv, long destoffset));

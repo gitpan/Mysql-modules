@@ -21,7 +21,7 @@
  *           Fax: +49 7123 / 14892
  *
  *
- *  $Id: dbdimp.c,v 1.1806 1997/09/03 22:39:05 joe Exp $
+ *  $Id: dbdimp.c,v 1.1809 1997/09/12 18:34:09 joe Exp $
  */
 
 
@@ -100,6 +100,7 @@ void do_error(SV* h, int rc, char* what) {
  *  Purpose: Called for connecting to a database and logging in.
  *
  *  Input:   dbh - database handle being initialized
+ *           imp_dbh - drivers private database handle data
  *           dbname - the database we want to log into; may be like
  *               "dbname:host" or "dbname:host:port"
  *           user - user name to connect as
@@ -109,8 +110,8 @@ void do_error(SV* h, int rc, char* what) {
  *           been called in the latter case
  *
  **************************************************************************/
-int dbd_db_login(SV* dbh, char* dbname, char* user, char* password) {
-    D_imp_dbh(dbh);
+int dbd_db_login(SV* dbh, imp_dbh_t* imp_dbh, char* dbname, char* user,
+		 char* password) {
     char* copy = NULL;
     char* host = NULL;
 
@@ -182,17 +183,18 @@ int dbd_db_login(SV* dbh, char* dbname, char* user, char* password) {
  *           and rollback to return ERROR in any case.
  *
  *  Input:   dbh - database handle being commited or rolled back
+ *           imp_dbh - drivers private database handle data
  *
  *  Returns: TRUE for success, FALSE otherwise; do_error has already
  *           been called in the latter case
  *
  **************************************************************************/
 
-int dbd_db_commit(SV* dbh) {
+int dbd_db_commit(SV* dbh, imp_dbh_t* imp_dbh) {
     return TRUE;
 }
 
-int dbd_db_rollback(SV* dbh) {
+int dbd_db_rollback(SV* dbh, imp_dbh_t* imp_dbh) {
     do_error(dbh, JW_ERR_NOT_IMPLEMENTED,
 		   "Rollback not implemented in mysql");
     return 0;
@@ -206,14 +208,14 @@ int dbd_db_rollback(SV* dbh) {
  *  Purpose: Disconnect a database handle from its database
  *
  *  Input:   dbh - database handle being disconnected
+ *           imp_dbh - drivers private database handle data
  *
  *  Returns: TRUE for success, FALSE otherwise; do_error has already
  *           been called in the latter case
  *
  **************************************************************************/
 
-int dbd_db_disconnect(SV* dbh) {
-    D_imp_dbh(dbh);
+int dbd_db_disconnect(SV* dbh, imp_dbh_t* imp_dbh) {
     /* We assume that disconnect will always work       */
     /* since most errors imply already disconnected.    */
     DBIc_off(imp_dbh, DBIcf_ACTIVE);
@@ -229,24 +231,54 @@ int dbd_db_disconnect(SV* dbh) {
 
 /***************************************************************************
  *
+ *  Name:    dbd_discon_all
+ *
+ *  Purpose: Disconnect all database handles at shutdown time
+ *
+ *  Input:   dbh - database handle being disconnected
+ *           imp_dbh - drivers private database handle data
+ *
+ *  Returns: TRUE for success, FALSE otherwise; do_error has already
+ *           been called in the latter case
+ *
+ **************************************************************************/
+
+int dbd_discon_all (SV *drh, imp_drh_t *imp_drh) {
+    /* The disconnect_all concept is flawed and needs more work */
+    if (!dirty && !SvTRUE(perl_get_sv("DBI::PERL_ENDING",0))) {
+	sv_setiv(DBIc_ERR(imp_drh), (IV)1);
+	sv_setpv(DBIc_ERRSTR(imp_drh),
+		(char*)"disconnect_all not implemented");
+	DBIh_EVENT2(drh, ERROR_event,
+		    DBIc_ERR(imp_drh), DBIc_ERRSTR(imp_drh));
+	return FALSE;
+    }
+    if (perl_destruct_level)
+	perl_destruct_level = 0;
+    return FALSE;
+}
+
+
+/***************************************************************************
+ *
  *  Name:    dbd_db_destroy
  *
  *  Purpose: Our part of the dbh destructor
  *
  *  Input:   dbh - database handle being destroyed
+ *           imp_dbh - drivers private database handle data
  *
  *  Returns: Nothing
  *
  **************************************************************************/
 
-void dbd_db_destroy(SV* dbh) {
-    D_imp_dbh(dbh);
+void dbd_db_destroy(SV* dbh, imp_dbh_t* imp_dbh) {
 
     /*
      *  Being on the safe side never hurts ...
      */
     if (DBIc_ACTIVE(imp_dbh))
-        dbd_db_disconnect(dbh);
+        dbd_db_disconnect(dbh, imp_dbh);
 
     /*
      *  Tell DBI, that dbh->destroy must no longer be called
@@ -263,6 +295,7 @@ void dbd_db_destroy(SV* dbh) {
  *           just nothing. :-)
  *
  *  Input:   dbh - database handle being modified
+ *           imp_dbh - drivers private database handle data
  *           keysv - the attribute name
  *           valuesv - the attribute value
  *
@@ -270,7 +303,7 @@ void dbd_db_destroy(SV* dbh) {
  *
  **************************************************************************/
 
-int dbd_db_STORE_attrib(SV* dbh, SV* keysv, SV* valuesv) {
+int dbd_db_STORE_attrib(SV* dbh, imp_dbh_t* imp_dbh, SV* keysv, SV* valuesv) {
     STRLEN kl;
     char *key = SvPV(keysv, kl);
     SV *cachesv = Nullsv;
@@ -304,8 +337,8 @@ int dbd_db_STORE_attrib(SV* dbh, SV* keysv, SV* valuesv) {
  *           just nothing. :-)
  *
  *  Input:   dbh - database handle being queried
+ *           imp_dbh - drivers private database handle data
  *           keysv - the attribute name
- *           valuesv - the attribute value
  *
  *  Returns: An SV*, if sucessfull; NULL otherwise
  *
@@ -313,10 +346,9 @@ int dbd_db_STORE_attrib(SV* dbh, SV* keysv, SV* valuesv) {
  *
  **************************************************************************/
 
-SV* dbd_db_FETCH_attrib(SV* dbh, SV* keysv) {
+SV* dbd_db_FETCH_attrib(SV* dbh, imp_dbh_t* imp_dbh, SV* keysv) {
     STRLEN kl;
     char *key = SvPV(keysv, kl);
-    D_imp_dbh(dbh);
 
     if (kl==10 && strEQ(key, "AutoCommit")){
         /*
@@ -430,6 +462,7 @@ static int CommandHasResult(char* statement) {
  *           statement handle constructor
  *
  *  Input:   sth - statement handle being initialized
+ *           imp_sth - drivers private statement handle data
  *           statement - pointer to string with SQL statement
  *           attribs - statement attributes, currently not in use
  *
@@ -438,8 +471,7 @@ static int CommandHasResult(char* statement) {
  *
  **************************************************************************/
 
-int dbd_st_prepare(SV* sth, char* statement, SV* attribs) {
-    D_imp_sth(sth);
+int dbd_st_prepare(SV* sth, imp_sth_t* imp_sth, char* statement, SV* attribs) {
     char* ptr = statement;
     int num_param;
     int i;
@@ -509,6 +541,7 @@ int dbd_st_prepare(SV* sth, char* statement, SV* attribs) {
  *           statement handle constructor
  *
  *  Input:   sth - statement handle being initialized
+ *           imp_sth - drivers private statement handle data
  *           statement - pointer to string with SQL statement
  *           attribs - statement attributes, currently not in use
  *
@@ -517,8 +550,7 @@ int dbd_st_prepare(SV* sth, char* statement, SV* attribs) {
  *
  **************************************************************************/
 
-int dbd_st_execute(SV* sth) {
-    D_imp_sth(sth);
+int dbd_st_execute(SV* sth, imp_sth_t* imp_sth) {
     D_imp_dbh_from_sth;
     SV** statement;
     STRLEN slen;
@@ -774,6 +806,7 @@ int dbd_describe(SV* sth, imp_sth_t* imp_sth) {
  *  Purpose: Called for fetching a result row
  *
  *  Input:   sth - statement handle being initialized
+ *           imp_sth - drivers private statement handle data
  *
  *  Returns: array of columns; the array is allocated by DBI via
  *           DBIS->get_fbav(imp_sth), even the values of the array
@@ -781,8 +814,7 @@ int dbd_describe(SV* sth, imp_sth_t* imp_sth) {
  *
  **************************************************************************/
 
-AV* dbd_st_fetch(SV* sth) {
-    D_imp_sth(sth);
+AV* dbd_st_fetch(SV* sth, imp_sth_t* imp_sth) {
     int num_fields;
     int ChopBlanks;
     int i;
@@ -862,15 +894,14 @@ AV* dbd_st_fetch(SV* sth) {
  *  Purpose: Called for freeing a mysql result
  *
  *  Input:   sth - statement handle being finished
+ *           imp_sth - drivers private statement handle data
  *
  *  Returns: TRUE for success, FALSE otherwise; do_error() will
  *           be called in the latter case
  *
  **************************************************************************/
 
-int dbd_st_finish(SV* sth) {
-    D_imp_sth(sth);
-
+int dbd_st_finish(SV* sth, imp_sth_t* imp_sth) {
     /* Cancel further fetches from this cursor.                 */
     /* We don't close the cursor till DESTROY.                  */
     /* The application may re execute it.                       */
@@ -890,13 +921,13 @@ int dbd_st_finish(SV* sth) {
  *  Purpose: Our part of the statement handles destructor
  *
  *  Input:   sth - statement handle being destroyed
+ *           imp_sth - drivers private statement handle data
  *
  *  Returns: Nothing
  *
  **************************************************************************/
 
-void dbd_st_destroy(SV* sth) {
-    D_imp_sth(sth);
+void dbd_st_destroy(SV* sth, imp_sth_t* imp_sth) {
     int i;
 
     /*
@@ -938,6 +969,7 @@ void dbd_st_destroy(SV* sth) {
  *           support just nothing
  *
  *  Input:   sth - statement handle being destroyed
+ *           imp_sth - drivers private statement handle data
  *           keysv - attribute name
  *           valuesv - attribute value
  *
@@ -946,7 +978,7 @@ void dbd_st_destroy(SV* sth) {
  *
  **************************************************************************/
 
-int dbd_st_STORE_attrib(SV* sth, SV* keysv, SV* valuesv) {
+int dbd_st_STORE_attrib(SV* sth, imp_sth_t* imp_sth, SV* keysv, SV* valuesv) {
     STRLEN(kl);
     char* key = SvPV(keysv, kl);
     int result = FALSE;
@@ -1153,6 +1185,7 @@ SV* dbd_st_FETCH_internal(SV* sth, int what, result_t res, int cacheit) {
  *  Purpose: Retrieves a statement handles attributes
  *
  *  Input:   sth - statement handle being destroyed
+ *           imp_sth - drivers private statement handle data
  *           keysv - attribute name
  *
  *  Returns: NULL for an unknown attribute, "undef" for error,
@@ -1163,8 +1196,7 @@ SV* dbd_st_FETCH_internal(SV* sth, int what, result_t res, int cacheit) {
 #define ST_FETCH_AV(what) \
     dbd_st_FETCH_internal(sth, (what), imp_sth->cda, TRUE)
 
-SV* dbd_st_FETCH_attrib(SV* sth, SV* keysv) {
-    D_imp_sth(sth);
+SV* dbd_st_FETCH_attrib(SV* sth, imp_sth_t* imp_sth, SV* keysv) {
     STRLEN(kl);
     char* key = SvPV(keysv, kl);
     SV* retsv = Nullsv;
@@ -1316,6 +1348,7 @@ SV* dbd_st_FETCH_attrib(SV* sth, SV* keysv) {
  *           attribute (currently not supported by DBD::mysql)
  *
  *  Input:   SV* - statement handle from which a blob will be fetched
+ *           imp_sth - drivers private statement handle data
  *           field - field number of the blob (note, that a row may
  *               contain more than one blob)
  *           offset - the offset of the field, where to start reading
@@ -1328,8 +1361,8 @@ SV* dbd_st_FETCH_attrib(SV* sth, SV* keysv) {
  *
  **************************************************************************/
 
-int dbd_st_blob_read(SV* sth, int field, long offset, long len,
-		     SV* destrv, long destoffset) {
+int dbd_st_blob_read (SV *sth, imp_sth_t *imp_sth, int field, long offset,
+		      long len, SV *destrv, long destoffset) {
     return FALSE;
 }
 
@@ -1341,15 +1374,14 @@ int dbd_st_blob_read(SV* sth, int field, long offset, long len,
  *  Purpose: Reads number of result rows
  *
  *  Input:   sth - statement handle
+ *           imp_sth - drivers private statement handle data
  *
  *  Returns: Number of rows returned or affected by executing the
  *           statement
  *
  **************************************************************************/
 
-int dbd_st_rows(SV* sth) {
-    D_imp_sth(sth);
-
+int dbd_st_rows(SV* sth, imp_sth_t* imp_sth) {
     return imp_sth->row_num;
 }
 
@@ -1361,27 +1393,22 @@ int dbd_st_rows(SV* sth) {
  *  Purpose: Binds a statement value to a parameter
  *
  *  Input:   sth - statement handle
+ *           imp_sth - drivers private statement handle data
  *           param - parameter number, counting starts with 1
  *           value - value being inserted for parameter "param"
+ *           sql_type - SQL type of the value
  *           attribs - bind parameter attributes, currently this must be
  *               one of the values SQL_CHAR, ...
  *           inout - TRUE, if parameter is an output variable (currently
  *               this is not supported)
- *           b - ???
+ *           maxlen - ???
  *
  *  Returns: TRUE for success, FALSE otherwise
  *
  **************************************************************************/
 
-int
-dbd_bind_ph(sth, param, value, attribs, inout, b)
-    SV *sth;
-    SV *param;
-    SV *value;
-    SV *attribs;
-    int inout,b;
-{
-    D_imp_sth(sth);
+int dbd_bind_ph (SV *sth, imp_sth_t *imp_sth, SV *param, SV *value,
+		 IV sql_type, SV *attribs, int is_inout, IV maxlen) {
     int paramNum = SvIV(param);
     imp_sth_ph_t* ph;
 
@@ -1391,7 +1418,7 @@ dbd_bind_ph(sth, param, value, attribs, inout, b)
 	return FALSE;
     }
 
-    if (inout) {
+    if (is_inout) {
         do_error(sth, JW_ERR_NOT_IMPLEMENTED,
 		       "Output parameters not implemented");
 	return FALSE;

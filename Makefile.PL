@@ -7,7 +7,7 @@
 #  with the exception that it cannot be placed on a CD-ROM or similar media
 #  for commercial distribution without the prior approval of the author.
 #
-#  $Id: Makefile.PL,v 1.1806 1997/09/03 22:38:55 joe Exp $
+#  $Id: Makefile.PL,v 1.1809 1997/09/12 18:33:46 joe Exp $
 #
 BEGIN {require 5.003;}
 use ExtUtils::MakeMaker;
@@ -15,15 +15,19 @@ use Config;
 # use strict; # we're possibly still 5.002 compliant ?
 
 $| = 1;
-print "Checking for DBI, 0.84 or later ... ";
-eval { use DBI 0.84 (); };
+print "Checking for Data::ShowTable ... ";
+$@ = '';
+eval q{ use Data::ShowTable (); };
 if ($@) {
-    print STDERR "\nYou must have installed the 'DBI' module,\n";
-    print STDERR "version 0.84 or later. You get it at the CPAN.\n";
+    print STDERR "\n\n";
+    print STDERR "You don't have installed the 'Data::ShowTable' module.\n";
+    print STDERR "You won't be able to use 'dbimon', the DBI monitor until.\n";
+    print STDERR "'Data::ShowTable' is installed. You get it at the CPAN.\n";
     print STDERR "See 'man CPAN' or 'perldoc CPAN' for more info.\n";
-    exit 10;
+    print STDERR "I will install 'dbimon' anyways.\n\n";
+} else {
+    print "ok\n";
 }
-print "ok\n";
 
 $Verbose++ if $ENV{USER} eq "k";
 
@@ -125,7 +129,7 @@ sub CheckForLibGcc() {
 	if ($line =~ /\%\{\!shared\:\-lgcc\}/) {
 	    my $libgccdir = $specs;
 	    $libgccdir =~ s/\/[^\/]+$//;
-	    print("\nYour building on ", $Config{'osname'}, " with gcc.",
+	    print("\nYou're building on ", $Config{'osname'}, " with gcc.",
 		  " According to your specs file\n    $specs\n",
 		  "your gcc doesn't seem to link against libgcc.a when ",
 		  " building shared libraries.\n",
@@ -163,6 +167,7 @@ sub initialize {
 	} elsif (!$Mysql::Config::EndSeen) {
 	    $line =~ s/DBD\:\:mSQL/DBD\:\:mysql/g;
 	    $line =~ s/DBI\:mSQL/DBI\:mysql/g;
+	    $line =~ s/mSQL\.xsi/mysql\.xsi/g;
 	    if ($line =~ /DBI\:\:_new_drh/) {
 		$line =~ s/mSQL/mysql/g;
 	    }
@@ -226,7 +231,7 @@ the subdirs lib/ and include/.",$gooddir) || $gooddir # || for 5.002
 	$extralibs = "-lc";
     } elsif ($Config{osname} eq 'solaris') {
 	# We need to link with -R if we're on Solaris.......Brain-damaged....
-	print("\nOh dear. Solaris? Let\'s add some more flags into the",
+	print("\nOh dear. Solaris? Let's add some more flags into the",
 	      " linker stage...\n\n");
 	$linkwith = "-L$libdir -R$libdir";
     } elsif ($Config{osname} eq 'hpux') {

@@ -182,10 +182,12 @@ while (Testing()) {
     Test($state or ($sth->numrows == 3))
 	or !$verbose or printf("Wrong number of rows, expected %d, got %d.\n",
 			      3, $sth->numrows);
-    Test($state or ($sth->numfields == 3))
-	or !$verbose or printf("Wrong number of fields, expected %d,"
-			       . " got %d.\n",
-			       3, $sth->numrows);
+    if ($driver eq 'mysql') {
+	Test($state or ($sth->numfields == 3))
+	    or !$verbose or printf("Wrong number of fields, expected %d,"
+				   . " got %d.\n",
+				   3, $sth->numrows);
+    }
 
     # There is the array reference $sth->name. It has to have as many
     # fields as $sth->numfields tells us
@@ -720,9 +722,11 @@ while (Testing()) {
 
     Test($state or ($sth = $dbh->query("drop table $firsttable")))
 	or test_error($dbh);
-    Test($state or ($sth->numfields == 0))
-	or !$verbose or printf("Expected num fields being zero, not %s.\n",
-			       $sth->numfields);
+    if ($driver eq 'mysql') {
+	Test($state or ($sth->numfields == 0))
+	    or !$verbose or printf("Expected num fields being zero, not %s.\n",
+				   $sth->numfields);
+    }
 
     # mSQL up to 1.0.16 had this annoying lost table bug, so I try to
     # force our users to upgrade somehow

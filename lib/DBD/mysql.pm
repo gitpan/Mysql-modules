@@ -1,6 +1,6 @@
 #   Our beloved Emacs will give us -*- perl -*- mode :-)
 #
-#   $Id: mysql.pm,v 1.1806 1997/09/03 22:39:59 joe Exp $
+#   $Id: mysql.pm,v 1.1809 1997/09/12 18:34:48 joe Exp $
 #
 #   Copyright (c) 1994,1995,1996,1997 Alligator Descartes, Tim Bunce
 #
@@ -16,7 +16,7 @@ use DynaLoader();
 use Carp ();
 @ISA = qw(DynaLoader);
 
-$VERSION = "2.002";
+$VERSION = "2.003";
 
 bootstrap DBD::mysql $VERSION;
 
@@ -48,10 +48,6 @@ sub driver{
 
 package DBD::mysql::dr; # ====== DRIVER ======
 use strict;
-
-sub errstr {
-    $DBD::mysql::errstr;
-}
 
 sub connect {
     my($drh, $dsn, $username, $password, $attrhash) = @_;
@@ -157,10 +153,6 @@ use strict;
 			   "TIMESTAMP"     => "CHAR"
 			  );
 
-sub errstr {
-    $DBD::mysql::errstr;
-}
-
 sub prepare {
     my($dbh, $statement)= @_;
 
@@ -211,10 +203,6 @@ sub _ListFields($$) {
 
 package DBD::mysql::st; # ====== STATEMENT ======
 use strict;
-
-sub errstr {
-    $DBD::mysql::errstr;
-}
 
 # Just a stub for backward compatibility; use is deprecated
 sub _ListSelectedFields ($) {
@@ -531,18 +519,18 @@ and
 
     $sth->func("_ListSelectedFields");
 
-no longer returns a simple hash, but a statement handle.
+no longer return a simple hash, but a statement handle.
 (I<_ListSelectedFields> is a stub now which just returns $self.)
 This should usually not be visible, when your statement handle gets
 out of scope. However, if your database handle (C<$dbh> in the
-aboce example) disconnects, either because you explicitly disconnect
+above example) disconnects, either because you explicitly disconnect
 or because he gets out of scope, and the statement handle is still
 active, DBI will issue a warning for active cursors being destroyed.
 
 The simple workaround is to execute C<$sth-E<gt>finish> or to ensure
 that C<$sth> gets out of scope before C<$dbh>. Sorry, but it was
 obvious nonsense to support two different things for accessing the
-basically same thing: An mSQL or MySQL result.
+basically same thing: A M(y)SQL result.
 
 =back
 
@@ -569,7 +557,7 @@ statement handle. For example instead of
 
 you just do a
 
-  my @names = $sth->{'NAME'};
+  my @names = @{$sth->{'NAME'}};
 
 =item Capitalized attribute names
 
@@ -651,7 +639,7 @@ get chopped of. (Tested with mysql 3.20.25 on a Linux 2.0.30 machine.)
 =head1 AUTHOR
 
 B<DBD::mSQL> has been primarily written by Alligator Descartes
-<I<descarte@hermetica.com>>, who has been aided and abetted by Gary
+(I<descarte@hermetica.com>), who has been aided and abetted by Gary
 Shea, Andreas Koenig and Tim Bunce amongst others. Apologies if your
 name isn't listed, it probably is in the file called
 'Acknowledgments'. As of version 0.80 the maintainer is Andreas König.
