@@ -1,6 +1,6 @@
 #   Our beloved Emacs will give us -*- perl -*- mode :-)
 #
-#   $Id: mysql.pm,v 1.18.12.1 1997/09/27 14:32:41 joe Exp $
+#   $Id: mysql.pm 1.1 Tue, 30 Sep 1997 01:28:08 +0200 joe $
 #
 #   Copyright (c) 1994,1995,1996,1997 Alligator Descartes, Tim Bunce
 #
@@ -55,8 +55,8 @@ sub connect {
     my($cWarn);
 
     # Avoid warnings for undefined values
-    if (!defined($username)) { $username = ''; }
-    if (!defined($password)) { $password = ''; }
+    $username ||= '';
+    $password ||= '';
 
     $cWarn = 0;
 
@@ -75,11 +75,10 @@ sub connect {
     #
     if (defined($attrhash)) {
 	my $hostname;
-	$cWarn = 1;
 	if (ref($attrhash)  &&  ref($attrhash) eq 'HASH') {
 	    if (defined($hostname = $attrhash->{'hostname'})) {
 		$dsn = "$dsn:hostname=$hostname";
-	    
+		$cWarn = 1;
 	    }
 	}
     }

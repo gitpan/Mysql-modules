@@ -1,3 +1,5 @@
+# $Id: Mysql.pm 1.1 Tue, 30 Sep 1997 01:28:08 +0200 joe $
+
 package Mysql;
 BEGIN { require 5.002 }
 # use vars qw($db_errstr); # 5.003
@@ -8,9 +10,7 @@ require Mysql::Statement;
 $QUIET  = $QUIET  = '';
 @ISA    = @ISA    = '';
 @EXPORT = @EXPORT = '';
-$VERSION = $VERSION = "1.1812";
-
-# $Revision: 1.18.12.1 $$Date: 1997/09/27 14:32:41 $$RCSfile: Mysql.pm,v $
+$VERSION = $VERSION = substr q$ProjectVersion: 1.1814 $, 16, 6;
 
 $QUIET = 0;
 

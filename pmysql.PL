@@ -29,8 +29,8 @@ $Config{'startperl'}
 
 $script = <<'!NO!SUBS!';
 
-# $Id: pmysql.PL,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
-my $version = substr q$Revision: 1.18.12.1 $, 10;
+# $Id: pmysql.PL 1.1 Tue, 30 Sep 1997 01:28:08 +0200 joe $
+my $version = substr q$Revision: 1.1 $, 10;
 
 BEGIN {require 5.002;}
 # use strict;      # only for testing. Unfriendly for the user-eval()s
@@ -102,19 +102,12 @@ if ($driver eq 'Mysql') {
 	varstring
     );
 } else {
-    @typelabel{
-        Msql::INT_TYPE(),
-	Msql::CHAR_TYPE(),
-	Msql::REAL_TYPE(),
-        Msql::IDENT_TYPE(),
-        Msql::IDX_TYPE(),
-        Msql::TEXT_TYPE(),
-        Msql::DATE_TYPE(),
-        Msql::UINT_TYPE(),
-        Msql::MONEY_TYPE(),
-        Msql::TIME_TYPE(),
-        Msql::SYSVAR_TYPE(),
-    } = qw(
+    my (@typenames);
+    for (qw/INT CHAR REAL IDENT IDX TEXT DATE UINT MONEY TIME SYSVAR/) {
+	my $type = 'Msql::' . $_ . '_TYPE';
+	push(@typenames, defined &{$type} ? &{$type} : 999);
+    }
+    @typelabel{ @typenames } = qw(
         int
         char 
         real
@@ -189,8 +182,8 @@ $escape = $quote;
 	$probe_server = "mSQL " . Msql->getserverinfo . " detected\n";
     } else {
 	$probe_server = "You seem to run a version of ";
-	$probe_server .= defined(&Msql::IDX_TYPE) ? "mSQL >= 2.0\n" :
-	                                            "mSQL < 2.0\n";
+	$probe_server .= defined &Msql::IDX_TYPE ? "mSQL >= 2.0\n" :
+	                                           "mSQL < 2.0\n";
     }
     printf ("$prompt -- interactive %s monitor version $version\n",
 	    ($driver eq 'Mysql') ? "MySQL" : "mSQL");
@@ -214,7 +207,7 @@ my $Debug = 0; # 1 | 2 | 4;
 #
 
 my($indexarg, $indexdes);
-if ($driver eq 'Mysql'  ||  !&Msql::IDX_TYPE()) {
+if ($driver eq 'Mysql'  ||  !defined &Msql::IDX_TYPE()) {
     $indexarg = "";
     $indexdes = " or tables";
 } else {

@@ -42,7 +42,7 @@ print OUT <<'!NO!SUBS!';
 #   with the exception that it cannot be placed on a CD-ROM or similar media
 #   for commercial distribution without the prior approval of the author.
 #
-#   $Id: dbimon.PL,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
+#   $Id: dbimon.PL 1.1 Tue, 30 Sep 1997 01:28:08 +0200 joe $
 #
 ############################################################################
 #
@@ -62,7 +62,7 @@ use Data::ShowTable ();
 #   Constants
 #
 my $VERSION = sprintf("%d.%02d%02d%02d",
-		      split(/\./, substr(q$Revision: 1.18.12.1 $, 10)));
+		      split(/\./, substr(q$Revision: 1.1 $, 10)));
 
 my @VALID_VARS = ("escapeChar", "less", "listWrapMargin", "maxTableWidth",
 		  "noEscape", "quoteChar", "sepChar", "showMode");

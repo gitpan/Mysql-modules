@@ -1,3 +1,5 @@
+# $Id: Mysql.pm 1.1 Tue, 30 Sep 1997 01:28:08 +0200 joe $
+
 package Bundle::Mysql;
 
 $VERSION = '0.01';

@@ -1,4 +1,18 @@
-$Id: ChangeLog,v 1.18.12.1 1997/09/27 14:32:40 joe Exp $
+1997-09-29  Andreas Koenig <koenig@anna.mind.de>
+
+	* t/50commit.t: Fixed printing of warning message when
+	  commit issues a warning.
+
+	* lib/DBD/mSQL.pm (connect): Fixed warning in connect, if
+	  attrhash is present.
+
+	* pmsql.PL: Fixed use of Msql 2 constants in @typelabel definition
+	  and similar things.
+
+	* lib/Msql/Statement.pm: Fixed use of Msql::TEXT_TYPE without
+	  checking whether we are running Msql 1.
+
+$Id: ChangeLog 1.1 Tue, 30 Sep 1997 01:28:08 +0200 joe $
 
 DBD::mysql for DBI - Written by Jochen Wiedmann <wiedmann@neckar-alb.de>
 

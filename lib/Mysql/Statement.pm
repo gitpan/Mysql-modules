@@ -1,10 +1,11 @@
+# $Id: Statement.pm 1.1 Tue, 30 Sep 1997 01:28:08 +0200 joe $
+
 package Mysql::Statement;
 
 use strict;
 use vars qw($OPTIMIZE $VERSION $AUTOLOAD);
 
-$VERSION = substr q$Revision: 1.18.12.1 $, 10;
-# $Id: Statement.pm,v 1.18.12.1 1997/09/27 14:32:41 joe Exp $
+$VERSION = substr q$ProjectVersion: 1.1814 $, 16, 6;
 
 $OPTIMIZE = 0; # controls, which optimization we default to
 
@@ -73,7 +74,8 @@ sub _leftjustify($$) {
 	|| ($type == Mysql::FIELD_TYPE_STRING())
         || ($type == Mysql::FIELD_TYPE_VAR_STRING());
     } else {
-	$type & (&Msql::CHAR_TYPE | &Msql::TEXT_TYPE);
+	$type & (&Msql::CHAR_TYPE |
+		 (defined &Msql::TEXT_TYPE ? Msql::TEXT_TYPE() : 0));
     }
 }
 
@@ -96,6 +98,7 @@ sub as_string {
 		my($s) = defined $row[$_] ? unctrl($row[$_]) : "NULL";
 		# New in 2.0: a string is longer than it should be
 		if (!$sth->isa('Mysql::Statement')  &&
+		    defined &Msql::TEXT_TYPE  &&
 		    $sth->type->[$_] == &Msql::TEXT_TYPE &&
 		    length($s) > $sth->length->[$_] + 5) {
 		    my $l = length($row[$_]);
@@ -155,6 +158,7 @@ sub as_string {
 	    $prow[$_] = defined $row[$_] ? unctrl($row[$_]) : "NULL";
 	    # New in 2.0: a string is longer than it should be
 	    if (!$sth->isa('Mysql::Statement')  &&
+		defined &Msql::TEXT_TYPE  &&
 		$sth->optimize &&
 		$sth->type->[$_] == &Msql::TEXT_TYPE &&
 		length($prow[$_]) > $sth->length->[$_] + 5

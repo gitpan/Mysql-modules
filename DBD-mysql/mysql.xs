@@ -1,6 +1,6 @@
 /* Hej, Emacs, this is -*- C -*- mode!
 
-   $Id: mysql.xs,v 1.18.12.1 1997/09/27 14:32:41 joe Exp $
+   $Id: mysql.xs 1.1 Tue, 30 Sep 1997 01:28:08 +0200 joe $
 
    Copyright (c) 1997 Jochen Wiedmann
 

@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 #
-#   $Id: 50commit.t,v 1.18.12.1 1997/09/27 14:32:41 joe Exp $
+#   $Id: 50commit.t 1.1 Tue, 30 Sep 1997 01:28:08 +0200 joe $
 #
 #   This is testing the transaction support.
 #
@@ -22,6 +22,12 @@ foreach $file ("lib.pl", "t/lib.pl") {
 if ($mdriver eq 'whatever') {
     print "1..0\n";
     exit 0;
+}
+
+
+use vars qw($gotWarning);
+sub CatchWarning ($) {
+    $gotWarning = 1;
 }
 
 
@@ -174,20 +180,28 @@ while (Testing()) {
     my $result;
     if (!$state) {
 	$@ = '';
-	eval { $result = $dbh->commit; }
+	$SIG{__WARN__} = \&CatchWarning;
+	$gotWarning = 0;
+	eval { $result = $dbh->commit; };
+	$SIG{__WARN__} = 'DEFAULT';
     }
-    Test($state or $dbh->err)
+    Test($state or $gotWarning)
 	or ErrMsg("Missing warning when committing in AutoCommit mode");
 
     #   Check whether rollback issues a warning in AutoCommit mode
+    #   We accept error messages as being legal, because the DBI
+    #   requirement of just issueing a warning seems scary.
     Test($state or $dbh->do("INSERT INTO $table VALUES (3, 'Alligator')"))
 	or ErrMsgF("Failed to insert: err %s, errstr %s.\n",
 		   $dbh->err, $dbh->errstr);
     if (!$state) {
 	$@ = '';
-	eval { $result = $dbh->rollback; }
+	$SIG{__WARN__} = \&CatchWarning;
+	$gotWarning = 0;
+	eval { $result = $dbh->rollback; };
+	$SIG{__WARN__} = 'DEFAULT';
     }
-    Test($state or $dbh->err)
+    Test($state or $gotWarning or $dbh->err)
 	or ErrMsg("Missing warning when rolling back in AutoCommit mode");
 
 
