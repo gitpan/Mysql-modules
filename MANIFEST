@@ -1,0 +1,43 @@
+ChangeLog
+INSTALL
+MANIFEST
+Makefile.PL
+README
+README.mysqlperl
+DBD-mysql/Acknowledgements
+DBD-mysql/Changes
+DBD-mysql/README
+DBD-mysql/Makefile.PL
+DBD-mysql/dbdimp.c
+DBD-mysql/dbdimp.h
+DBD-mysql/myMsql.c		Library file for common Msql/Mysql sources
+DBD-mysql/myMsql.h		Header file for common Msql/Mysql sources
+DBD-mysql/mysql.xs
+lib/DBD/mysql.pm
+lib/Mysql/Statement.pm
+lib/Mysql.pm
+MysqlPerl/Mysql.xs
+MysqlPerl/Makefile.PL
+MysqlPerl/constants.c
+MysqlPerl/myMsql.c
+MysqlPerl/typemap
+pmysql.PL
+t/README			Tutorial for writing new tests
+t/00base.t			base DBI driver test: Loads DBI and driver
+t/10dsnlist.t			Low level DBI driver test: List data sources
+t/20createdrop.t		Test for creating and dropping tables
+t/30insertfetch.t		Test for insert, fetch and delete of rows
+t/40bindparam.t			Test of bind_col and bind_param methods
+t/40blobs.t			Test for working with blobs
+t/40listfields.t		Test for field oriented methods, e.g. NAME
+t/40nulls.t			Test for correct handling of NULL's
+t/40numrows.t			Test for row attributes, e.g. $sth->{rows}
+t/50chopblanks.t		Test for the 'ChopBlanks' attribute
+t/lib.pl			Common declarations of the test suite
+t/ak-dbd.t			Miscellaneous DBI driver tests
+t/akmisc.t			Msql/Mysql only, also a valuable tutorial
+t/msql1.t			Test script for Msql only
+t/msql2.t			Test script for Msql with msql2 only
+t/mysql.t			Test script for Mysql only
+t/mysql2.t			Test script for Mysql only
+t/skeleton.test			Skeleton file for writing new tests

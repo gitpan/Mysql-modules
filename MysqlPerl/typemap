@@ -1,0 +1,6 @@
+# $Header: /home/joe/cvs/mysql-modules/MysqlPerl/typemap,v 1.1.1.1 1997/08/27 10:32:13 joe Exp $ 
+# basic C types
+Mysql                   T_HVREF
+Mysql::Statement        T_HVREF
+Msql                    T_HVREF
+Msql::Statement         T_HVREF

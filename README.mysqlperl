@@ -1,0 +1,28 @@
+The perl module mysql.pm, formerly known as myslqperl, has found a new
+home in the mysql-modules distribution.
+
+The mysql-modules distribution contains both mysql.pm and DBD::mysql. The
+two modules operate independently from each other.
+
+The DBD::mysql is based on the DBI by Tim Bunce.
+
+The mysqlperl module is based on Msql.pm of Andreas König.
+
+It is intended to merge the two modules to such an extent that we have
+no redundant code anymore. The place where the merge takes place is
+the Msql::Integrat module, but this should be completely transparent
+for the user. Neither MsqlPerl users nor DBD::mSQL users should have
+to worry about Msql::Integrat. It's a backstage operator.
+
+Anyways, I personally consider mysqlperl as deprecated. As soon as
+DBD::mysql is sufficiently stable (I hope it always is), there will
+be no real advantage in using mysqlperl except of compatibility to
+existing sources. DBI bases sources, on the other hand, are much
+more portable from database to database. DBI is the future.
+
+I hope to provide the same level of support for both modules. At the
+time of this writing (July 1997) the Msql.pm module is more stable and
+more complete.
+
+Enjoy,
+Jochen Wiedmann
